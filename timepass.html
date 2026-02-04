@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Form + Preview + OCR Autofill</title>
+
+  <!-- OCR library (runs in-browser; no Node/React needed) -->
+  <script src="https://unpkg.com/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
+
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:#0f1a2e;
+      --muted:#9fb0d0;
+      --text:#e9f0ff;
+      --line:rgba(255,255,255,.12);
+      --accent:#6aa6ff;
+      --accent2:#33d1a0;
+      --danger:#ff5a73;
+      --shadow: 0 18px 50px rgba(0,0,0,.35);
+      --radius:18px;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background: radial-gradient(1200px 900px at 20% 10%, rgba(106,166,255,.18), transparent 60%),
+                  radial-gradient(900px 700px at 80% 20%, rgba(51,209,160,.14), transparent 55%),
+                  var(--bg);
+      color:var(--text);
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+    }
+    .app{
+      width:min(980px, 100%);
+    }
+    .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      margin-bottom:16px;
+    }
+    .title{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    h1{
+      margin:0;
+      font-size: clamp(20px, 2.4vw, 28px);
+      letter-spacing:.2px;
+    }
+    .subtitle{
+      margin:0;
+      color:var(--muted);
+      font-size:14px;
+    }
+    .btn{
+      appearance:none;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      color:var(--text);
+      padding:10px 14px;
+      border-radius: 14px;
+      cursor:pointer;
+      display:inline-flex;
+      gap:10px;
+      align-items:center;
+      transition: transform .06s ease, background .15s ease, border-color .15s ease;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{ background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.18); }
+    .btn:active{ transform: translateY(1px); }
+    .btn.primary{
+      background: linear-gradient(135deg, rgba(106,166,255,.95), rgba(51,209,160,.85));
+      border: none;
+      color: #07101f;
+      font-weight: 700;
+    }
+    .btn.primary:hover{ filter: brightness(1.05); }
+    .btn.danger{
+      border-color: rgba(255,90,115,.35);
+      background: rgba(255,90,115,.10);
+    }
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .card-head{
+      padding:18px 18px 0 18px;
+    }
+    .card-body{
+      padding:18px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap:14px;
+    }
+    .field{
+      grid-column: span 6;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .field.full{ grid-column: span 12; }
+    .field.third{ grid-column: span 4; }
+    label{
+      font-size:13px;
+      color:var(--muted);
+    }
+    input, select{
+      width:100%;
+      padding:12px 12px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(10,18,34,.55);
+      color:var(--text);
+      outline:none;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    input:focus, select:focus{
+      border-color: rgba(106,166,255,.55);
+      box-shadow: 0 0 0 4px rgba(106,166,255,.12);
+    }
+    .help{
+      margin-top:6px;
+      font-size:12px;
+      color:rgba(159,176,208,.9);
+    }
+    .actions{
+      margin-top:14px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      justify-content:flex-end;
+      align-items:center;
+    }
+    .error{
+      display:none;
+      margin-top:10px;
+      padding:12px 14px;
+      border-radius:14px;
+      border:1px solid rgba(255,90,115,.35);
+      background: rgba(255,90,115,.10);
+      color: #ffdbe0;
+    }
+
+    /* Preview */
+    .preview-grid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:12px;
+      margin-top:10px;
+    }
+    .row{
+      display:flex;
+      justify-content:space-between;
+      gap:18px;
+      padding:12px 14px;
+      border:1px solid rgba(255,255,255,.12);
+      border-radius: 14px;
+      background: rgba(10,18,34,.40);
+    }
+    .row .k{
+      color: var(--muted);
+      font-size:13px;
+      min-width: 160px;
+    }
+    .row .v{
+      font-weight:600;
+      text-align:right;
+      overflow-wrap:anywhere;
+    }
+
+    /* OCR Modal */
+    .modal{
+      position:fixed;
+      inset:0;
+      background: rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+      z-index: 999;
+    }
+    .modal.open{ display:flex; }
+    .modal-card{
+      width:min(860px, 100%);
+      background: rgba(15,26,46,.98);
+      border:1px solid rgba(255,255,255,.14);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .modal-top{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:14px 16px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+    }
+    .modal-top .h{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+    .modal-top .h strong{ font-size:15px; }
+    .modal-top .h span{ font-size:12px; color: var(--muted); }
+    .modal-body{
+      padding:16px;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:14px;
+    }
+    .drop{
+      border:1px dashed rgba(255,255,255,.22);
+      border-radius:18px;
+      padding:14px;
+      background: rgba(255,255,255,.04);
+      min-height: 240px;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      align-items:center;
+      gap:10px;
+      text-align:center;
+    }
+    .drop small{ color: var(--muted); }
+    .status{
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:18px;
+      padding:14px;
+      background: rgba(10,18,34,.45);
+      min-height: 240px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .progress{
+      width:100%;
+      height:10px;
+      background: rgba(255,255,255,.08);
+      border-radius: 999px;
+      overflow:hidden;
+    }
+    .progress > div{
+      height:100%;
+      width:0%;
+      background: linear-gradient(90deg, rgba(106,166,255,.95), rgba(51,209,160,.85));
+      border-radius:999px;
+      transition: width .12s ease;
+    }
+    .mono{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      font-size:12px;
+      color: rgba(233,240,255,.9);
+      white-space: pre-wrap;
+      overflow:auto;
+      max-height: 210px;
+      border-top:1px solid rgba(255,255,255,.10);
+      padding-top:10px;
+    }
+
+    @media (max-width: 860px){
+      .field{ grid-column: span 12; }
+      .field.third{ grid-column: span 12; }
+      .modal-body{ grid-template-columns: 1fr; }
+      .row{ flex-direction:column; align-items:flex-start; }
+      .row .v{ text-align:left; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="title">
+        <h1>Personal Details Form</h1>
+        <p class="subtitle">Fill manually or scan a labeled document to auto-fill (OCR).</p>
+      </div>
+
+      <!-- OCR button top-right -->
+      <button class="btn" id="openOcrBtn" type="button" title="Scan and auto-fill using OCR">
+        📄 OCR Scanner
+      </button>
+    </div>
+
+    <div class="card">
+      <div class="card-head"></div>
+      <div class="card-body">
+
+        <!-- Screen 1: Form -->
+        <section id="formScreen">
+          <form id="detailsForm" novalidate>
+            <div class="grid">
+              <div class="field">
+                <label for="firstName">First Name</label>
+                <input id="firstName" name="firstName" type="text" autocomplete="given-name" required />
+              </div>
+
+              <div class="field">
+                <label for="lastName">Last Name</label>
+                <input id="lastName" name="lastName" type="text" autocomplete="family-name" required />
+              </div>
+
+              <div class="field full">
+                <label for="streetAddress">Street Address (Numbers &amp; Text)</label>
+                <input id="streetAddress" name="streetAddress" type="text" autocomplete="street-address" required />
+              </div>
+
+              <div class="field">
+                <label for="city">City</label>
+                <input id="city" name="city" type="text" autocomplete="address-level2" required />
+              </div>
+
+              <div class="field">
+                <label for="state">State</label>
+                <input id="state" name="state" type="text" autocomplete="address-level1" required />
+              </div>
+
+              <div class="field third">
+                <label for="zipCode">Zip Code (Numbers)</label>
+                <input id="zipCode" name="zipCode" type="text" inputmode="numeric" pattern="\\d{5}(-\\d{4})?" placeholder="e.g. 60601" required />
+                <div class="help">Accepts 5 digits (or 5+4 like 60601-1234).</div>
+              </div>
+
+              <div class="field">
+                <label for="email">E-mail</label>
+                <input id="email" name="email" type="email" autocomplete="email" placeholder="name@example.com" required />
+              </div>
+
+              <div class="field">
+                <label for="phone">Phone (Mobile incl. country code)</label>
+                <input id="phone" name="phone" type="tel" inputmode="tel" placeholder="+1 312 555 0123" required />
+                <div class="help">Tip: include “+CountryCode”.</div>
+              </div>
+
+              <div class="field">
+                <label for="dob">Date of Birth</label>
+                <input id="dob" name="dob" type="date" required />
+              </div>
+
+              <div class="field">
+                <label for="maritalStatus">Marital Status</label>
+                <select id="maritalStatus" name="maritalStatus" required>
+                  <option value="" disabled selected>Select...</option>
+                  <option value="Single">Single</option>
+                  <option value="Married">Married</option>
+                  <option value="Divorced">Divorced</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="error" id="formError"></div>
+
+            <div class="actions">
+              <button class="btn danger" id="clearBtn" type="button">Clear</button>
+              <button class="btn primary" type="submit">Submit → Preview</button>
+            </div>
+          </form>
+        </section>
+
+        <!-- Screen 2: Preview -->
+        <section id="previewScreen" style="display:none;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+            <div>
+              <h2 style="margin:0; font-size:18px;">Preview</h2>
+              <div class="help" style="margin-top:6px;">Review the details. You can go back to edit.</div>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btn" id="backBtn" type="button">← Back to Edit</button>
+              <button class="btn primary" id="finalBtn" type="button" title="Example action">Confirm</button>
+            </div>
+          </div>
+
+          <div class="preview-grid" id="previewGrid"></div>
+
+          <div class="help" style="margin-top:12px;">
+            (Confirm button is a placeholder—connect it to your real submit flow.)
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- OCR Modal -->
+  <div class="modal" id="ocrModal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ocrTitle">
+      <div class="modal-top">
+        <div class="h">
+          <strong id="ocrTitle">OCR Scanner → Autofill</strong>
+          <span>Upload/capture a document image with labeled fields (order doesn’t matter).</span>
+        </div>
+        <button class="btn" id="closeOcrBtn" type="button">✕ Close</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="drop" id="dropZone">
+          <div style="font-size:32px;">📷</div>
+          <div style="font-weight:700;">Drop an image here</div>
+          <small>or choose a file / use camera</small>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-top:6px;">
+            <button class="btn primary" id="chooseFileBtn" type="button">Choose Image</button>
+            <button class="btn" id="useCameraBtn" type="button" title="Uses phone camera if supported">Use Camera</button>
+          </div>
+          <input id="ocrFileInput" type="file" accept="image/*" style="display:none;" />
+          <input id="ocrCameraInput" type="file" accept="image/*" capture="environment" style="display:none;" />
+        </div>
+
+        <div class="status">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <div>
+              <div style="font-weight:700;">Status</div>
+              <div class="help" id="ocrHint">Select an image to start OCR.</div>
+            </div>
+            <button class="btn" id="runOcrBtn" type="button" disabled>Run OCR</button>
+          </div>
+
+          <div class="progress" aria-label="OCR progress">
+            <div id="ocrBar"></div>
+          </div>
+
+          <div class="help" id="ocrStatusText">Idle</div>
+          <div class="mono" id="ocrRawText" title="Raw OCR text will appear here"></div>
+        </div>
+      </div>
+
+      <div style="padding:0 16px 16px 16px;">
+        <div class="help">
+          Notes: OCR runs locally in your browser using Tesseract.js. For camera capture, most browsers require HTTPS.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // -------------------------
+    // Screen navigation
+    // -------------------------
+    const formScreen = document.getElementById('formScreen');
+    const previewScreen = document.getElementById('previewScreen');
+    const detailsForm = document.getElementById('detailsForm');
+    const previewGrid = document.getElementById('previewGrid');
+    const formError = document.getElementById('formError');
+
+    const backBtn = document.getElementById('backBtn');
+    const finalBtn = document.getElementById('finalBtn');
+    const clearBtn = document.getElementById('clearBtn');
+
+    function showForm(){
+      previewScreen.style.display = 'none';
+      formScreen.style.display = 'block';
+      formError.style.display = 'none';
+      formError.textContent = '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    function showPreview(){
+      formScreen.style.display = 'none';
+      previewScreen.style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function getFormData(){
+      const fd = new FormData(detailsForm);
+      return {
+        firstName: (fd.get('firstName') || '').toString().trim(),
+        lastName: (fd.get('lastName') || '').toString().trim(),
+        streetAddress: (fd.get('streetAddress') || '').toString().trim(),
+        city: (fd.get('city') || '').toString().trim(),
+        state: (fd.get('state') || '').toString().trim(),
+        zipCode: (fd.get('zipCode') || '').toString().trim(),
+        email: (fd.get('email') || '').toString().trim(),
+        phone: (fd.get('phone') || '').toString().trim(),
+        dob: (fd.get('dob') || '').toString().trim(),
+        maritalStatus: (fd.get('maritalStatus') || '').toString().trim(),
+      };
+    }
+
+    function validate(data){
+      const problems = [];
+
+      // Required checks
+      for (const [k,v] of Object.entries(data)){
+        if (!v) problems.push(`${prettyKey(k)} is required.`);
+      }
+
+      // Zip: 5 digits or 5-4
+      if (data.zipCode && !/^\d{5}(-\d{4})?$/.test(data.zipCode.trim())){
+        problems.push(`Zip Code must be 5 digits (or 5+4 like 60601-1234).`);
+      }
+
+      // Phone: simple check for + and digits (len >= 8 digits)
+      const digits = (data.phone || '').replace(/[^\d]/g,'');
+      if (data.phone && digits.length < 8){
+        problems.push(`Phone number looks too short.`);
+      }
+
+      // DOB: should parse as date
+      if (data.dob){
+        const d = new Date(data.dob);
+        if (Number.isNaN(d.getTime())) problems.push(`Date of Birth is invalid.`);
+      }
+
+      // Email: handled by input type=email, but double-check
+      if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)){
+        problems.push(`E-mail is invalid.`);
+      }
+
+      return problems;
+    }
+
+    function prettyKey(k){
+      const map = {
+        firstName:'First Name',
+        lastName:'Last Name',
+        streetAddress:'Street Address',
+        city:'City',
+        state:'State',
+        zipCode:'Zip Code',
+        email:'E-mail',
+        phone:'Phone',
+        dob:'Date of Birth',
+        maritalStatus:'Marital Status',
+      };
+      return map[k] || k;
+    }
+
+    function renderPreview(data){
+      previewGrid.innerHTML = '';
+
+      const rows = [
+        ['First Name', data.firstName],
+        ['Last Name', data.lastName],
+        ['Street Address', data.streetAddress],
+        ['City', data.city],
+        ['State', data.state],
+        ['Zip Code', data.zipCode],
+        ['E-mail', data.email],
+        ['Phone', data.phone],
+        ['Date of Birth', data.dob],
+        ['Marital Status', data.maritalStatus],
+      ];
+
+      for (const [k,v] of rows){
+        const div = document.createElement('div');
+        div.className = 'row';
+        div.innerHTML = `
+          <div class="k">${escapeHtml(k)}</div>
+          <div class="v">${escapeHtml(v || '—')}</div>
+        `;
+        previewGrid.appendChild(div);
+      }
+    }
+
+    function escapeHtml(str){
+      return String(str).replace(/[&<>"']/g, s => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[s]));
+    }
+
+    detailsForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const data = getFormData();
+      const problems = validate(data);
+
+      if (problems.length){
+        formError.style.display = 'block';
+        formError.textContent = problems.join(' ');
+        return;
+      }
+
+      renderPreview(data);
+      showPreview();
+    });
+
+    backBtn.addEventListener('click', showForm);
+
+    finalBtn.addEventListener('click', () => {
+      // Placeholder confirm action
+      alert('Confirmed! (Hook this button up to your real submit flow.)');
+    });
+
+    clearBtn.addEventListener('click', () => {
+      detailsForm.reset();
+      formError.style.display = 'none';
+      formError.textContent = '';
+    });
+
+    // -------------------------
+    // OCR modal + scanning
+    // -------------------------
+    const openOcrBtn = document.getElementById('openOcrBtn');
+    const closeOcrBtn = document.getElementById('closeOcrBtn');
+    const ocrModal = document.getElementById('ocrModal');
+
+    const dropZone = document.getElementById('dropZone');
+    const chooseFileBtn = document.getElementById('chooseFileBtn');
+    const useCameraBtn = document.getElementById('useCameraBtn');
+    const ocrFileInput = document.getElementById('ocrFileInput');
+    const ocrCameraInput = document.getElementById('ocrCameraInput');
+
+    const runOcrBtn = document.getElementById('runOcrBtn');
+    const ocrBar = document.getElementById('ocrBar');
+    const ocrStatusText = document.getElementById('ocrStatusText');
+    const ocrRawText = document.getElementById('ocrRawText');
+    const ocrHint = document.getElementById('ocrHint');
+
+    let selectedImageFile = null;
+
+    function openModal(){
+      ocrModal.classList.add('open');
+      ocrModal.setAttribute('aria-hidden','false');
+    }
+    function closeModal(){
+      ocrModal.classList.remove('open');
+      ocrModal.setAttribute('aria-hidden','true');
+    }
+
+    openOcrBtn.addEventListener('click', openModal);
+    closeOcrBtn.addEventListener('click', closeModal);
+    ocrModal.addEventListener('click', (e) => {
+      if (e.target === ocrModal) closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && ocrModal.classList.contains('open')) closeModal();
+    });
+
+    chooseFileBtn.addEventListener('click', () => ocrFileInput.click());
+    useCameraBtn.addEventListener('click', () => ocrCameraInput.click());
+
+    ocrFileInput.addEventListener('change', () => handleFile(ocrFileInput.files?.[0]));
+    ocrCameraInput.addEventListener('change', () => handleFile(ocrCameraInput.files?.[0]));
+
+    // Drag & drop
+    ['dragenter','dragover'].forEach(evt => {
+      dropZone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.style.borderColor = 'rgba(106,166,255,.75)';
+        dropZone.style.background = 'rgba(106,166,255,.08)';
+      });
+    });
+    ['dragleave','drop'].forEach(evt => {
+      dropZone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.style.borderColor = 'rgba(255,255,255,.22)';
+        dropZone.style.background = 'rgba(255,255,255,.04)';
+      });
+    });
+    dropZone.addEventListener('drop', (e) => {
+      const file = e.dataTransfer?.files?.[0];
+      handleFile(file);
+    });
+
+    function handleFile(file){
+      if (!file) return;
+      if (!file.type.startsWith('image/')){
+        setOcrStatus('Please choose an image file (JPG/PNG/etc).', 0);
+        return;
+      }
+      selectedImageFile = file;
+      runOcrBtn.disabled = false;
+      ocrHint.textContent = `Selected: ${file.name}`;
+      ocrRawText.textContent = '';
+      setOcrStatus('Ready. Click “Run OCR”.', 0);
+    }
+
+    runOcrBtn.addEventListener('click', async () => {
+      if (!selectedImageFile) return;
+      await runOcr(selectedImageFile);
+    });
+
+    function setOcrStatus(text, progress01){
+      ocrStatusText.textContent = text;
+      const p = Math.max(0, Math.min(1, progress01 || 0));
+      ocrBar.style.width = Math.round(p * 100) + '%';
+    }
+
+    async function runOcr(file){
+      runOcrBtn.disabled = true;
+      setOcrStatus('Starting OCR…', 0.02);
+
+      try{
+        const { data } = await Tesseract.recognize(
+          file,
+          'eng',
+          {
+            logger: (m) => {
+              if (m.status === 'recognizing text' && typeof m.progress === 'number'){
+                setOcrStatus(`Recognizing text… ${Math.round(m.progress*100)}%`, m.progress);
+              } else if (m.status){
+                setOcrStatus(m.status + '…', Math.min(0.95, parseFloat(m.progress) || 0.08));
+              }
+            }
+          }
+        );
+
+        const raw = (data.text || '').trim();
+        ocrRawText.textContent = raw || '(No text detected)';
+
+        setOcrStatus('Parsing labeled fields…', 0.98);
+
+        const extracted = parseLabeledText(raw);
+        autofillForm(extracted);
+
+        setOcrStatus('Done! Fields were filled where matches were found.', 1);
+      } catch(err){
+        console.error(err);
+        setOcrStatus('OCR failed. Try a clearer image (good lighting, flat, readable).', 0);
+      } finally {
+        runOcrBtn.disabled = false;
+      }
+    }
+
+    // -------------------------
+    // OCR parsing (labels not in order)
+    // -------------------------
+    function normalizeText(text){
+      return (text || '')
+        .replace(/\r/g,'')
+        .replace(/[ \t]+/g,' ')
+        .replace(/\u00A0/g,' ')
+        .trim();
+    }
+
+    function parseLabeledText(text){
+      const t = normalizeText(text);
+      const lines = t.split('\n').map(l => l.trim()).filter(Boolean);
+
+      // Helper: find value by multiple possible labels
+      function findByLabels(labelVariants){
+        const labelRegex = new RegExp(`^\\s*(?:${labelVariants.map(escapeRegex).join('|')})\\s*[:\\-]?\\s*(.*)$`, 'i');
+
+        for (let i=0; i<lines.length; i++){
+          const line = lines[i];
+
+          // If label and value on same line
+          let m = line.match(labelRegex);
+          if (m){
+            const sameLineVal = (m[1] || '').trim();
+            if (sameLineVal) return sameLineVal;
+
+            // If label line has no value, take next non-empty line
+            const next = lines[i+1] ? lines[i+1].trim() : '';
+            if (next) return next;
+          }
+
+          // Also search label anywhere in line: "First Name .... John"
+          for (const lab of labelVariants){
+            const idx = line.toLowerCase().indexOf(lab.toLowerCase());
+            if (idx !== -1){
+              // take what comes after the label
+              const after = line.slice(idx + lab.length).replace(/^[:\-\s]+/,'').trim();
+              if (after) return after;
+            }
+          }
+        }
+        return '';
+      }
+
+      // Normalize DOB to yyyy-mm-dd if possible
+      function normalizeDob(val){
+        if (!val) return '';
+        const v = val.trim();
+
+        // Already ISO
+        if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+
+        // MM/DD/YYYY or M/D/YYYY
+        let m = v.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+        if (m){
+          const mm = String(m[1]).padStart(2,'0');
+          const dd = String(m[2]).padStart(2,'0');
+          const yyyy = m[3];
+          return `${yyyy}-${mm}-${dd}`;
+        }
+
+        // DD/MM/YYYY (try if first part > 12)
+        m = v.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+        if (m && parseInt(m[1],10) > 12){
+          const dd = String(m[1]).padStart(2,'0');
+          const mm = String(m[2]).padStart(2,'0');
+          const yyyy = m[3];
+          return `${yyyy}-${mm}-${dd}`;
+        }
+
+        // Fallback: Date parse
+        const d = new Date(v);
+        if (!Number.isNaN(d.getTime())){
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth()+1).padStart(2,'0');
+          const dd = String(d.getDate()).padStart(2,'0');
+          return `${yyyy}-${mm}-${dd}`;
+        }
+        return '';
+      }
+
+      function normalizeMarital(val){
+        if (!val) return '';
+        const v = val.toLowerCase();
+        if (v.includes('single')) return 'Single';
+        if (v.includes('married')) return 'Married';
+        if (v.includes('divorced')) return 'Divorced';
+        return '';
+      }
+
+      // Extract
+      const firstName = findByLabels(['First Name','Firstname','Given Name']);
+      const lastName = findByLabels(['Last Name','Lastname','Surname','Family Name']);
+      const streetAddress = findByLabels(['Street Address','Address','Mailing Address','Street']);
+      const city = findByLabels(['City','Town']);
+      const state = findByLabels(['State','Province','Region']);
+      const zipCode = findByLabels(['Zip Code','Zip','Postal Code','Postcode']);
+      const email = findByLabels(['E-mail','Email','Email Address','E Mail']);
+      const phone = findByLabels(['Phone','Mobile','Mobile Number','Telephone','Cell']);
+      const dobRaw = findByLabels(['Date of Birth','DOB','Birth Date','Birthday']);
+      const maritalRaw = findByLabels(['Marital Status','Marital']);
+
+      // Sometimes OCR returns "City State Zip" on one line under Address; try a small heuristic:
+      // If city/state/zip missing and we have a line that looks like "City, ST 60601"
+      if ((!city || !state || !zipCode) && streetAddress){
+        for (const line of lines){
+          const m = line.match(/^(.+?)[,]\s*([A-Za-z]{2,})\s+(\d{5}(?:-\d{4})?)$/);
+          if (m){
+            // only fill missing
+            if (!city)  extracted.city = m[1].trim();
+            if (!state) extracted.state = m[2].trim();
+            if (!zipCode) extracted.zipCode = m[3].trim();
+            break;
+          }
+        }
+      }
+
+      const extracted = {
+        firstName: firstName,
+        lastName: lastName,
+        streetAddress: streetAddress,
+        city: city,
+        state: state,
+        zipCode: zipCode,
+        email: email,
+        phone: phone,
+        dob: normalizeDob(dobRaw),
+        maritalStatus: normalizeMarital(maritalRaw),
+      };
+
+      // Light cleanup
+      if (extracted.zipCode) extracted.zipCode = extracted.zipCode.replace(/[^\d\-]/g,'').trim();
+      if (extracted.email) extracted.email = extracted.email.replace(/\s/g,'').trim();
+
+      // If email wasn’t found by labels, try to detect any email in the text
+      if (!extracted.email){
+        const emailMatch = t.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+        if (emailMatch) extracted.email = emailMatch[0];
+      }
+
+      // If phone wasn’t found by labels, try detect a phone-like string with optional +
+      if (!extracted.phone){
+        const phoneMatch = t.match(/(?:\+\s?\d{1,3}[\s\-\.]?)?(?:\(?\d{2,4}\)?[\s\-\.]?)?\d{3}[\s\-\.]?\d{4,}/);
+        if (phoneMatch) extracted.phone = phoneMatch[0].replace(/\s{2,}/g,' ').trim();
+      }
+
+      // City/State/Zip heuristic object fix
+      if (typeof extracted.city === 'undefined') extracted.city = '';
+      if (typeof extracted.state === 'undefined') extracted.state = '';
+      if (typeof extracted.zipCode === 'undefined') extracted.zipCode = '';
+
+      return extracted;
+
+      function escapeRegex(s){
+        return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }
+    }
+
+    function autofillForm(extracted){
+      // Fill only if we found something
+      const setIf = (id, val) => {
+        if (!val) return;
+        const el = document.getElementById(id);
+        if (!el) return;
+
+        // For select marital status, only set if it matches options
+        if (el.tagName === 'SELECT'){
+          const ok = Array.from(el.options).some(o => o.value === val);
+          if (ok) el.value = val;
+          return;
+        }
+        el.value = val;
+      };
+
+      setIf('firstName', extracted.firstName);
+      setIf('lastName', extracted.lastName);
+      setIf('streetAddress', extracted.streetAddress);
+      setIf('city', extracted.city);
+      setIf('state', extracted.state);
+      setIf('zipCode', extracted.zipCode);
+      setIf('email', extracted.email);
+      setIf('phone', extracted.phone);
+      setIf('dob', extracted.dob);
+      setIf('maritalStatus', extracted.maritalStatus);
+
+      // If user was on preview, refresh it; otherwise keep in form
+      if (previewScreen.style.display !== 'none'){
+        renderPreview(getFormData());
+      }
+
+      // Give quick feedback at top of form screen
+      formError.style.display = 'block';
+      formError.style.borderColor = 'rgba(51,209,160,.35)';
+      formError.style.background = 'rgba(51,209,160,.10)';
+      formError.style.color = '#d7fff2';
+      formError.textContent = 'OCR autofill attempted. Please review and correct any mistakes.';
+      setTimeout(() => {
+        // revert styles gently
+        formError.style.borderColor = 'rgba(255,90,115,.35)';
+        formError.style.background = 'rgba(255,90,115,.10)';
+        formError.style.color = '#ffdbe0';
+      }, 2500);
+    }
+  </script>
+</body>
+</html>
