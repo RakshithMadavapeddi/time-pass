@@ -1,0 +1,966 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bundle Scanner Form (Barcode → Game/Bundle/Ticket/Total)</title>
+
+  <!-- ZXing (pure browser JS; no React/Node). Works on most modern browsers. -->
+  <script src="https://unpkg.com/@zxing/library@0.20.0"></script>
+
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:#0f1a2e;
+      --muted:#9fb0d0;
+      --text:#e9f0ff;
+      --line:rgba(255,255,255,.12);
+      --accent:#6aa6ff;
+      --accent2:#33d1a0;
+      --danger:#ff5a73;
+      --shadow: 0 18px 50px rgba(0,0,0,.35);
+      --radius:18px;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: radial-gradient(1200px 900px at 20% 10%, rgba(106,166,255,.18), transparent 60%),
+                  radial-gradient(900px 700px at 80% 20%, rgba(51,209,160,.14), transparent 55%),
+                  var(--bg);
+      color:var(--text);
+      min-height:100vh;
+      display:flex;
+      justify-content:center;
+      padding:24px;
+    }
+    .app{ width:min(1100px, 100%); }
+    .topbar{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:16px;
+      margin-bottom:16px;
+    }
+    h1{ margin:0; font-size: clamp(20px, 2.4vw, 28px); }
+    .subtitle{ margin:6px 0 0; color:var(--muted); font-size:14px; }
+    .btn{
+      appearance:none;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      color:var(--text);
+      padding:10px 14px;
+      border-radius: 14px;
+      cursor:pointer;
+      display:inline-flex;
+      gap:10px;
+      align-items:center;
+      transition: transform .06s ease, background .15s ease, border-color .15s ease;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{ background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.18); }
+    .btn:active{ transform: translateY(1px); }
+    .btn.primary{
+      background: linear-gradient(135deg, rgba(106,166,255,.95), rgba(51,209,160,.85));
+      border: none;
+      color: #07101f;
+      font-weight: 800;
+    }
+    .btn.danger{
+      border-color: rgba(255,90,115,.35);
+      background: rgba(255,90,115,.10);
+    }
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .card-body{ padding:18px; }
+
+    .help{ color:var(--muted); font-size:13px; margin-top:8px; }
+    .error{
+      display:none;
+      margin-top:12px;
+      padding:12px 14px;
+      border-radius:14px;
+      border:1px solid rgba(255,90,115,.35);
+      background: rgba(255,90,115,.10);
+      color:#ffdbe0;
+    }
+
+    table{
+      width:100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin-top:14px;
+      overflow:hidden;
+      border-radius: 16px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(10,18,34,.35);
+    }
+    thead th{
+      text-align:left;
+      font-size:12px;
+      color: rgba(159,176,208,.95);
+      font-weight:700;
+      padding:12px 12px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+    }
+    tbody td{
+      padding:12px 12px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      vertical-align:middle;
+      font-size:14px;
+    }
+    tbody tr:last-child td{ border-bottom:none; }
+
+    .pill{
+      display:inline-flex;
+      padding:6px 10px;
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:999px;
+      background: rgba(255,255,255,.06);
+      font-weight:700;
+      font-size:12px;
+    }
+    .right{ text-align:right; }
+    .actions{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      margin-top:16px;
+      flex-wrap:wrap;
+    }
+    .summary{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .sumBox{
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(10,18,34,.35);
+      border-radius: 14px;
+      padding:10px 12px;
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      min-width: 200px;
+    }
+    .sumBox .k{ color:var(--muted); font-size:12px; }
+    .sumBox .v{ font-weight:900; font-size:16px; }
+
+    /* Modal */
+    .modal{
+      position:fixed;
+      inset:0;
+      background: rgba(0,0,0,.62);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+      z-index:999;
+    }
+    .modal.open{ display:flex; }
+    .modal-card{
+      width:min(980px, 100%);
+      background: rgba(15,26,46,.98);
+      border:1px solid rgba(255,255,255,.14);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .modal-top{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:14px 16px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+      gap:12px;
+    }
+    .modal-top .h{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+    .modal-top strong{ font-size:15px; }
+    .modal-top span{ font-size:12px; color: var(--muted); }
+    .modal-body{
+      padding:16px;
+      display:grid;
+      grid-template-columns: 1.3fr 1fr;
+      gap:14px;
+    }
+    video{
+      width:100%;
+      border-radius:18px;
+      border:1px solid rgba(255,255,255,.12);
+      background:#000;
+      aspect-ratio: 16/10;
+      object-fit: cover;
+    }
+    .scanPanel{
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:18px;
+      padding:14px;
+      background: rgba(10,18,34,.45);
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .scanPanel label{
+      font-size:12px;
+      color:var(--muted);
+    }
+    .scanPanel input{
+      width:100%;
+      padding:12px 12px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(10,18,34,.55);
+      color:var(--text);
+      outline:none;
+    }
+    .scanPanel input:focus{
+      border-color: rgba(106,166,255,.55);
+      box-shadow: 0 0 0 4px rgba(106,166,255,.12);
+    }
+    .scanPanel .row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .scanPanel .row > *{ flex: 1; min-width: 160px; }
+    .scanHint{ font-size:12px; color:var(--muted); }
+
+    /* Confirm popup */
+    .confirm{
+      position:fixed;
+      inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+      background: rgba(0,0,0,.62);
+      z-index:1000;
+    }
+    .confirm.open{ display:flex; }
+    .confirm-card{
+      width:min(720px, 100%);
+      background: rgba(15,26,46,.98);
+      border:1px solid rgba(255,255,255,.14);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .confirm-body{ padding:16px; }
+    .kv{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+      margin-top:10px;
+    }
+    .kv .box{
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:16px;
+      background: rgba(10,18,34,.40);
+      padding:12px 12px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .kv .box .k{ font-size:12px; color:var(--muted); }
+    .kv .box .v{ font-size:16px; font-weight:900; overflow-wrap:anywhere; }
+    .confirm-actions{
+      display:flex;
+      justify-content:flex-end;
+      gap:10px;
+      flex-wrap:wrap;
+      padding:0 16px 16px 16px;
+    }
+
+    @media (max-width: 900px){
+      .modal-body{ grid-template-columns: 1fr; }
+      .kv{ grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div>
+        <h1>Bundle Scanner Form</h1>
+        <div class="subtitle">Scan a barcode → decode Game ID / Bundle ID / Ticket # → calculate bundle total → save.</div>
+      </div>
+
+      <!-- Scanner button (top-right) -->
+      <button class="btn" id="openScannerBtn" type="button">📷 Barcode Scanner</button>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <form id="bundleForm">
+          <div class="help">
+            Pricing map used:
+            <span class="pill">427 → $10</span>
+            <span class="pill">1611 → $20</span>
+            <span class="pill">1583 → $5</span>
+          </div>
+
+          <div class="error" id="formError"></div>
+
+          <table aria-label="Scanned bundles table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Game ID</th>
+                <th>Bundle ID</th>
+                <th>Ticket #</th>
+                <th class="right">Unit Price</th>
+                <th class="right">Bundle Total</th>
+                <th class="right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="rowsBody">
+              <!-- dynamic -->
+            </tbody>
+          </table>
+
+          <div class="actions">
+            <div class="summary">
+              <div class="sumBox">
+                <div class="k">Bundles scanned</div>
+                <div class="v" id="bundleCount">0</div>
+              </div>
+              <div class="sumBox">
+                <div class="k">Grand total</div>
+                <div class="v" id="grandTotal">$0</div>
+              </div>
+            </div>
+
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btn danger" id="clearAllBtn" type="button">Clear All</button>
+              <button class="btn primary" type="submit">Submit Form</button>
+            </div>
+          </div>
+
+          <!-- Dynamic hidden inputs get inserted here -->
+          <div id="hiddenInputs"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scanner Modal -->
+  <div class="modal" id="scannerModal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="scannerTitle">
+      <div class="modal-top">
+        <div class="h">
+          <strong id="scannerTitle">Barcode Scanner</strong>
+          <span>Point the camera at the barcode. Or paste a code for testing.</span>
+        </div>
+        <button class="btn" id="closeScannerBtn" type="button">✕ Close</button>
+      </div>
+
+      <div class="modal-body">
+        <div>
+          <video id="video" muted playsinline></video>
+          <div class="help">
+            Note: camera access usually requires HTTPS or <span class="pill">http://localhost</span>.
+          </div>
+        </div>
+
+        <div class="scanPanel">
+          <div class="row">
+            <div>
+              <label for="cameraSelect">Camera</label>
+              <select id="cameraSelect" class="btn" style="width:100%; justify-content:space-between;"></select>
+            </div>
+            <div style="display:flex; align-items:flex-end; gap:10px;">
+              <button class="btn primary" id="startBtn" type="button" style="flex:1;">Start</button>
+              <button class="btn" id="stopBtn" type="button" style="flex:1;" disabled>Stop</button>
+            </div>
+          </div>
+
+          <div>
+            <label for="manualCode">Manual paste (optional)</label>
+            <input id="manualCode" placeholder="Paste raw scanned code here (digits / text)" />
+            <div class="scanHint">Tip: the code may include extra digits — we’ll decode the first parts.</div>
+          </div>
+
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn" id="decodeManualBtn" type="button">Decode Manual</button>
+            <button class="btn danger" id="resetScanBtn" type="button">Reset</button>
+          </div>
+
+          <div class="help" id="scanStatus">Idle</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Popup (shown after a scan is decoded) -->
+  <div class="confirm" id="confirmPopup" aria-hidden="true">
+    <div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <div class="modal-top">
+        <div class="h">
+          <strong id="confirmTitle">Scan Result</strong>
+          <span>Verify details, then click Update to save into the form.</span>
+        </div>
+        <button class="btn" id="closeConfirmBtn" type="button">✕</button>
+      </div>
+
+      <div class="confirm-body">
+        <div class="kv">
+          <div class="box">
+            <div class="k">Game ID</div>
+            <div class="v" id="cGameId">—</div>
+          </div>
+          <div class="box">
+            <div class="k">Bundle ID</div>
+            <div class="v" id="cBundleId">—</div>
+          </div>
+          <div class="box">
+            <div class="k">Ticket # (count)</div>
+            <div class="v" id="cTicketNum">—</div>
+          </div>
+          <div class="box">
+            <div class="k">Unit Price</div>
+            <div class="v" id="cUnitPrice">—</div>
+          </div>
+          <div class="box" style="grid-column: 1 / -1;">
+            <div class="k">Bundle Total</div>
+            <div class="v" id="cBundleTotal">—</div>
+          </div>
+        </div>
+
+        <div class="error" id="confirmError" style="display:none;"></div>
+
+        <div style="margin-top:12px;">
+          <label style="font-size:12px; color:var(--muted);">If the Game ID is not in your pricing map, enter a unit price:</label>
+          <input id="fallbackUnitPrice" type="number" min="0" step="0.01" placeholder="Unit price (only if needed)" style="
+            width:100%;
+            padding:12px 12px;
+            border-radius:14px;
+            border:1px solid rgba(255,255,255,.14);
+            background: rgba(10,18,34,.55);
+            color:var(--text);
+            outline:none;
+            margin-top:6px;
+          ">
+        </div>
+      </div>
+
+      <div class="confirm-actions">
+        <button class="btn" id="rescanBtn" type="button">Rescan</button>
+        <button class="btn primary" id="updateBtn" type="button">Update</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------------------------
+    // Pricing map (given)
+    // ---------------------------
+    const PRICE_MAP = {
+      "427": 10,
+      "1611": 20,
+      "1583": 5
+    };
+
+    // ---------------------------
+    // State
+    // ---------------------------
+    const entries = []; // { gameId, bundleId, ticketNumber, unitPrice, total, raw }
+    let pendingDecoded = null;
+
+    // ZXing reader
+    let codeReader = null;
+    let currentControls = null;
+    let scanLocked = false;
+
+    // ---------------------------
+    // Elements
+    // ---------------------------
+    const bundleForm = document.getElementById('bundleForm');
+    const rowsBody = document.getElementById('rowsBody');
+    const hiddenInputs = document.getElementById('hiddenInputs');
+    const formError = document.getElementById('formError');
+
+    const bundleCountEl = document.getElementById('bundleCount');
+    const grandTotalEl = document.getElementById('grandTotal');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+
+    // Scanner modal
+    const scannerModal = document.getElementById('scannerModal');
+    const openScannerBtn = document.getElementById('openScannerBtn');
+    const closeScannerBtn = document.getElementById('closeScannerBtn');
+
+    const videoEl = document.getElementById('video');
+    const cameraSelect = document.getElementById('cameraSelect');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const scanStatus = document.getElementById('scanStatus');
+
+    const manualCode = document.getElementById('manualCode');
+    const decodeManualBtn = document.getElementById('decodeManualBtn');
+    const resetScanBtn = document.getElementById('resetScanBtn');
+
+    // Confirm popup
+    const confirmPopup = document.getElementById('confirmPopup');
+    const closeConfirmBtn = document.getElementById('closeConfirmBtn');
+    const rescanBtn = document.getElementById('rescanBtn');
+    const updateBtn = document.getElementById('updateBtn');
+
+    const cGameId = document.getElementById('cGameId');
+    const cBundleId = document.getElementById('cBundleId');
+    const cTicketNum = document.getElementById('cTicketNum');
+    const cUnitPrice = document.getElementById('cUnitPrice');
+    const cBundleTotal = document.getElementById('cBundleTotal');
+
+    const confirmError = document.getElementById('confirmError');
+    const fallbackUnitPrice = document.getElementById('fallbackUnitPrice');
+
+    // ---------------------------
+    // Helpers
+    // ---------------------------
+    function money(n){
+      const num = Number(n || 0);
+      return '$' + num.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    }
+
+    function showError(el, msg){
+      el.style.display = 'block';
+      el.textContent = msg;
+    }
+    function hideError(el){
+      el.style.display = 'none';
+      el.textContent = '';
+    }
+
+    function openModal(el){
+      el.classList.add('open');
+      el.setAttribute('aria-hidden', 'false');
+    }
+    function closeModal(el){
+      el.classList.remove('open');
+      el.setAttribute('aria-hidden', 'true');
+    }
+
+    function digitsOnly(raw){
+      return String(raw || '').replace(/\D/g, '');
+    }
+
+    /**
+     * Decode barcode digits into {gameId, bundleId, ticketNumber}.
+     *
+     * Based on your sample image:
+     * - game id is at the start (3 or 4 digits in samples: 427, 1611, 1583)
+     * - bundle id follows (6 digits when game id is 3 digits; 7 digits when game id is 4 digits)
+     * - ticket number follows (3 digits) and is used as ticket COUNT
+     * - the rest (if present) is ignored
+     */
+    function decodeTicketCode(raw){
+      const d = digitsOnly(raw);
+      if (!d || d.length < 12) return null;
+
+      // Prefer matching known game IDs first (longest first).
+      const knownIds = Object.keys(PRICE_MAP).sort((a,b)=>b.length-a.length);
+      let gameId = null;
+      for (const id of knownIds){
+        if (d.startsWith(id)){ gameId = id; break; }
+      }
+
+      // If unknown, use heuristic: first 4 digits; else first 3.
+      if (!gameId){
+        const first4 = d.slice(0,4);
+        const first3 = d.slice(0,3);
+        gameId = (PRICE_MAP[first4] != null) ? first4 : first3;
+      }
+
+      const gLen = gameId.length;
+      const bundleLen = (gLen === 3) ? 6 : 7; // from your examples
+      const bundleId = d.slice(gLen, gLen + bundleLen);
+      const ticketStr = d.slice(gLen + bundleLen, gLen + bundleLen + 3);
+
+      if (!bundleId || bundleId.length !== bundleLen) return null;
+      if (!ticketStr || ticketStr.length !== 3) return null;
+
+      const ticketNumber = parseInt(ticketStr, 10);
+      if (!Number.isFinite(ticketNumber) || ticketNumber <= 0) return null;
+
+      return { gameId, bundleId, ticketNumber, rawDigits: d, rawText: String(raw || '') };
+    }
+
+    function computePricing(gameId, ticketNumber, overrideUnitPrice){
+      const mapped = PRICE_MAP[String(gameId)];
+      const unitPrice = (overrideUnitPrice != null && overrideUnitPrice !== '')
+        ? Number(overrideUnitPrice)
+        : (mapped != null ? Number(mapped) : null);
+
+      if (unitPrice == null || !Number.isFinite(unitPrice) || unitPrice < 0) return null;
+
+      const total = unitPrice * Number(ticketNumber);
+      return { unitPrice, total };
+    }
+
+    function refreshTable(){
+      rowsBody.innerHTML = '';
+      hiddenInputs.innerHTML = '';
+
+      let grand = 0;
+
+      entries.forEach((e, idx) => {
+        grand += Number(e.total || 0);
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${idx+1}</td>
+          <td><span class="pill">${escapeHtml(e.gameId)}</span></td>
+          <td>${escapeHtml(e.bundleId)}</td>
+          <td>${escapeHtml(e.ticketNumber)}</td>
+          <td class="right">${money(e.unitPrice)}</td>
+          <td class="right"><strong>${money(e.total)}</strong></td>
+          <td class="right">
+            <button class="btn danger" type="button" data-remove="${idx}">Remove</button>
+          </td>
+        `;
+        rowsBody.appendChild(tr);
+
+        // Hidden inputs (so form submission includes all entries)
+        hiddenInputs.insertAdjacentHTML('beforeend', `
+          <input type="hidden" name="entries[${idx}][gameId]" value="${escapeAttr(e.gameId)}">
+          <input type="hidden" name="entries[${idx}][bundleId]" value="${escapeAttr(e.bundleId)}">
+          <input type="hidden" name="entries[${idx}][ticketNumber]" value="${escapeAttr(e.ticketNumber)}">
+          <input type="hidden" name="entries[${idx}][unitPrice]" value="${escapeAttr(e.unitPrice)}">
+          <input type="hidden" name="entries[${idx}][total]" value="${escapeAttr(e.total)}">
+          <input type="hidden" name="entries[${idx}][raw]" value="${escapeAttr(e.rawDigits || '')}">
+        `);
+      });
+
+      bundleCountEl.textContent = String(entries.length);
+      grandTotalEl.textContent = money(grand);
+    }
+
+    function escapeHtml(str){
+      return String(str).replace(/[&<>"']/g, s => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[s]));
+    }
+    function escapeAttr(str){
+      return String(str).replace(/"/g, '&quot;');
+    }
+
+    // ---------------------------
+    // Confirm popup flow
+    // ---------------------------
+    function openConfirm(decoded){
+      pendingDecoded = decoded;
+      hideError(confirmError);
+      fallbackUnitPrice.value = '';
+
+      const mapped = PRICE_MAP[String(decoded.gameId)];
+      const pricing = computePricing(decoded.gameId, decoded.ticketNumber);
+
+      cGameId.textContent = decoded.gameId;
+      cBundleId.textContent = decoded.bundleId;
+      cTicketNum.textContent = decoded.ticketNumber;
+
+      if (mapped != null){
+        cUnitPrice.textContent = money(mapped);
+        fallbackUnitPrice.placeholder = 'Unit price (not needed for this Game ID)';
+      } else {
+        cUnitPrice.textContent = 'Unknown (enter unit price below)';
+        fallbackUnitPrice.placeholder = 'Unit price required (Game ID not in map)';
+      }
+
+      if (pricing){
+        cBundleTotal.textContent = money(pricing.total);
+      } else {
+        cBundleTotal.textContent = '—';
+      }
+
+      openModal(confirmPopup);
+    }
+
+    function closeConfirm(){
+      closeModal(confirmPopup);
+      pendingDecoded = null;
+      hideError(confirmError);
+      fallbackUnitPrice.value = '';
+    }
+
+    function updateConfirmTotalsLive(){
+      if (!pendingDecoded) return;
+      const override = fallbackUnitPrice.value;
+      const pricing = computePricing(pendingDecoded.gameId, pendingDecoded.ticketNumber, override);
+      if (pricing){
+        cUnitPrice.textContent = money(pricing.unitPrice);
+        cBundleTotal.textContent = money(pricing.total);
+        hideError(confirmError);
+      } else {
+        cBundleTotal.textContent = '—';
+      }
+    }
+
+    fallbackUnitPrice.addEventListener('input', updateConfirmTotalsLive);
+
+    updateBtn.addEventListener('click', () => {
+      if (!pendingDecoded) return;
+
+      const override = fallbackUnitPrice.value;
+      const pricing = computePricing(pendingDecoded.gameId, pendingDecoded.ticketNumber, override);
+
+      if (!pricing){
+        showError(confirmError, 'Unit price is required for this Game ID (or must be a valid number).');
+        return;
+      }
+
+      entries.push({
+        gameId: String(pendingDecoded.gameId),
+        bundleId: String(pendingDecoded.bundleId),
+        ticketNumber: Number(pendingDecoded.ticketNumber),
+        unitPrice: Number(pricing.unitPrice),
+        total: Number(pricing.total),
+        rawDigits: pendingDecoded.rawDigits
+      });
+
+      refreshTable();
+      closeConfirm();
+
+      // Optional: resume scanning automatically if scanner is open
+      if (scannerModal.classList.contains('open')) {
+        startScanning().catch(()=>{});
+      }
+    });
+
+    rescanBtn.addEventListener('click', () => {
+      closeConfirm();
+      if (scannerModal.classList.contains('open')) {
+        startScanning().catch(()=>{});
+      }
+    });
+
+    closeConfirmBtn.addEventListener('click', closeConfirm);
+
+    // ---------------------------
+    // Scanner modal flow
+    // ---------------------------
+    openScannerBtn.addEventListener('click', async () => {
+      openModal(scannerModal);
+      scanStatus.textContent = 'Loading cameras…';
+      await populateCameras();
+      scanStatus.textContent = 'Ready. Click Start.';
+    });
+
+    closeScannerBtn.addEventListener('click', async () => {
+      await stopScanning();
+      closeModal(scannerModal);
+    });
+
+    scannerModal.addEventListener('click', async (e) => {
+      if (e.target === scannerModal) {
+        await stopScanning();
+        closeModal(scannerModal);
+      }
+    });
+
+    document.addEventListener('keydown', async (e) => {
+      if (e.key === 'Escape') {
+        if (confirmPopup.classList.contains('open')) closeConfirm();
+        if (scannerModal.classList.contains('open')) {
+          await stopScanning();
+          closeModal(scannerModal);
+        }
+      }
+    });
+
+    startBtn.addEventListener('click', () => startScanning());
+    stopBtn.addEventListener('click', () => stopScanning());
+
+    decodeManualBtn.addEventListener('click', () => {
+      const raw = manualCode.value.trim();
+      if (!raw) return;
+      onRawScanned(raw);
+    });
+
+    resetScanBtn.addEventListener('click', () => {
+      manualCode.value = '';
+      scanStatus.textContent = 'Reset.';
+      scanLocked = false;
+    });
+
+    async function populateCameras(){
+      // Ask permission (some browsers only list devices after permission)
+      try{
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        stream.getTracks().forEach(t => t.stop());
+      }catch(_){ /* ignore */ }
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter(d => d.kind === 'videoinput');
+
+      cameraSelect.innerHTML = '';
+      if (!cams.length){
+        cameraSelect.innerHTML = '<option value="">No camera found</option>';
+        return;
+      }
+
+      cams.forEach((cam, i) => {
+        const opt = document.createElement('option');
+        opt.value = cam.deviceId;
+        opt.textContent = cam.label || `Camera ${i+1}`;
+        cameraSelect.appendChild(opt);
+      });
+
+      // Try to default to a back camera if label hints it
+      const backIndex = cams.findIndex(c => /back|rear|environment/i.test(c.label));
+      if (backIndex >= 0) cameraSelect.selectedIndex = backIndex;
+    }
+
+    async function startScanning(){
+      if (scanLocked) return;
+      scanLocked = false;
+
+      if (!window.ZXing){
+        scanStatus.textContent = 'ZXing library not loaded.';
+        return;
+      }
+
+      if (!navigator.mediaDevices?.getUserMedia){
+        scanStatus.textContent = 'Camera not supported in this browser.';
+        return;
+      }
+
+      // Stop any existing session first
+      await stopScanning();
+
+      scanStatus.textContent = 'Starting camera…';
+      startBtn.disabled = true;
+
+      try{
+        codeReader = new ZXing.BrowserMultiFormatReader();
+
+        const deviceId = cameraSelect.value || null;
+        stopBtn.disabled = false;
+
+        // decodeFromVideoDevice keeps scanning; we stop it when we get a result
+        currentControls = await codeReader.decodeFromVideoDevice(
+          deviceId,
+          videoEl,
+          (result, err) => {
+            if (result && !scanLocked) {
+              scanLocked = true; // prevent duplicates
+              const rawText = result.getText ? result.getText() : String(result);
+              onRawScanned(rawText);
+            }
+          }
+        );
+
+        scanStatus.textContent = 'Scanning…';
+      } catch (err){
+        console.error(err);
+        scanStatus.textContent = 'Could not start scanner. Check HTTPS/permissions.';
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      }
+    }
+
+    async function stopScanning(){
+      scanLocked = false;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+
+      try{
+        if (currentControls) {
+          currentControls.stop();
+          currentControls = null;
+        }
+      }catch(_){}
+
+      try{
+        if (codeReader) {
+          codeReader.reset();
+          codeReader = null;
+        }
+      }catch(_){}
+
+      // Also stop any stream attached to the video element
+      try{
+        const stream = videoEl.srcObject;
+        if (stream && stream.getTracks) stream.getTracks().forEach(t => t.stop());
+        videoEl.srcObject = null;
+      }catch(_){}
+
+      scanStatus.textContent = 'Stopped.';
+    }
+
+    function onRawScanned(raw){
+      // Stop scanning while user confirms
+      stopScanning().catch(()=>{});
+      scanStatus.textContent = 'Code detected. Decoding…';
+
+      const decoded = decodeTicketCode(raw);
+      if (!decoded){
+        scanStatus.textContent = 'Could not decode. Try again with a clearer scan.';
+        scanLocked = false;
+        return;
+      }
+
+      // Show confirm popup with computed totals
+      scanStatus.textContent = 'Decoded. Review popup.';
+      openConfirm(decoded);
+      scanLocked = false;
+    }
+
+    // ---------------------------
+    // Table actions + form submit
+    // ---------------------------
+    rowsBody.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-remove]');
+      if (!btn) return;
+
+      const idx = Number(btn.getAttribute('data-remove'));
+      if (!Number.isFinite(idx)) return;
+
+      entries.splice(idx, 1);
+      refreshTable();
+    });
+
+    clearAllBtn.addEventListener('click', () => {
+      entries.length = 0;
+      refreshTable();
+      hideError(formError);
+    });
+
+    bundleForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      hideError(formError);
+
+      if (entries.length === 0){
+        showError(formError, 'Scan at least one barcode before submitting.');
+        return;
+      }
+
+      // Example: show what would be submitted
+      const payload = { entries: entries.map(e => ({
+        gameId: e.gameId,
+        bundleId: e.bundleId,
+        ticketNumber: e.ticketNumber,
+        unitPrice: e.unitPrice,
+        total: e.total
+      }))};
+
+      alert('Form submitted! Payload:\n\n' + JSON.stringify(payload, null, 2));
+    });
+
+    // Initialize table
+    refreshTable();
+  </script>
+</body>
+</html>
