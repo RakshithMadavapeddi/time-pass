@@ -350,3 +350,23 @@ input:focus, select:focus{outline:2px solid rgba(0,0,0,.15); border-color:#bdbdb
   font-weight:900;
 }
 .seg__btn:active{transform:translateY(1px)}
+
+
+.previewWrap{
+  position:relative;
+  min-height:calc(100vh - 56px);
+  background:#efefef;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  padding-bottom:90px;
+}
+.previewImg{
+  width:100%;
+  max-width:420px;
+  border-radius:16px;
+  box-shadow: var(--shadow);
+  background:#fff;
+  object-fit:contain;
+}

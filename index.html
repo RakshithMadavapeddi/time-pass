@@ -290,23 +290,40 @@
         </div>
       </section>
 
-      <section class="view" data-route="scanner">
-        <header class="topbar">
-          <button class="iconbtn" data-action="back" aria-label="Back">←</button>
-          <div class="topbar__title">Scanner</div>
-          <button class="iconbtn" data-action="toggleTorch" aria-label="Torch">⚡</button>
-        </header>
+    <section class="view" data-route="scanner">
+  <header class="topbar">
+    <button class="iconbtn" data-action="back" aria-label="Back">←</button>
+    <div class="topbar__title">Scanner</div>
+    <button class="iconbtn" data-action="toggleTorch" aria-label="Torch">⚡</button>
+  </header>
 
-        <div class="scannerWrap">
-          <video id="video" class="scannerVideo" autoplay playsinline></video>
-          <div class="scannerGrid" aria-hidden="true"></div>
+  <div class="scannerWrap">
+    <video id="video" class="scannerVideo" autoplay playsinline></video>
+    <div class="scannerGrid" aria-hidden="true"></div>
 
-          <div class="scannerFooter">
-            <button class="scanHint" data-action="useSampleId">Use Sample ID</button>
-            <button class="shutter" data-action="startScan" aria-label="Start scanning"></button>
-          </div>
-        </div>
-      </section>
+    <div class="scannerFooter">
+      <button class="scanHint" data-action="useSampleId">Use Sample ID</button>
+      <button class="shutter" data-action="capturePhoto" aria-label="Capture photo"></button>
+    </div>
+  </div>
+</section>
+
+<section class="view" data-route="photoPreview">
+  <header class="topbar">
+    <button class="iconbtn" data-action="backToScanner" aria-label="Back">←</button>
+    <div class="topbar__title">Photo Preview</div>
+    <span></span>
+  </header>
+
+  <div class="previewWrap">
+    <img id="previewImg" class="previewImg" alt="Captured barcode preview" />
+
+    <div class="footer split">
+      <button class="btn secondary" data-action="retakePhoto">Retake</button>
+      <button class="btn primary" data-action="approvePhoto">Done</button>
+    </div>
+  </div>
+</section>
 
       <section class="view" data-route="scanSuccess">
         <header class="topbar">

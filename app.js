@@ -1,10 +1,32 @@
+// app.js (FULL UPDATED FILE) — Capture → Preview → Approve/Retake → Decode → Autofill
+
 // --- App State ---
 const store = {
   mod: { autofill: "success", pay: "success" }, // moderator forcing
-  stay: { checkIn: "", checkOut: "", adults: "", children: "", room: "", rate: "", deposit: 0, discount: 0 },
-  guest: { fullName: "", street: "", city: "", state: "", zip: "", gender: "", age: "", idType: "", idNumber: "", dob: "" },
+  stay: {
+    checkIn: "",
+    checkOut: "",
+    adults: "",
+    children: "",
+    room: "",
+    rate: "",
+    deposit: 0,
+    discount: 0,
+  },
+  guest: {
+    fullName: "",
+    street: "",
+    city: "",
+    state: "",
+    zip: "",
+    gender: "",
+    age: "",
+    idType: "",
+    idNumber: "",
+    dob: "",
+  },
   booking: { bookingId: "", roomNumber: "", total: 0, txnId: "" },
-  payment: { method: "", status: "idle" } // idle|processing|success|declined
+  payment: { method: "", status: "idle" }, // idle|processing|success|declined
 };
 
 // --- Utilities ---
@@ -22,7 +44,8 @@ function randDigits(len) {
 }
 function daysBetween(isoA, isoB) {
   if (!isoA || !isoB) return 0;
-  const a = new Date(isoA), b = new Date(isoB);
+  const a = new Date(isoA),
+    b = new Date(isoB);
   const diff = Math.max(0, b - a);
   return Math.round(diff / (1000 * 60 * 60 * 24));
 }
@@ -37,29 +60,41 @@ function calcAgeFromDob(dobISO) {
   return String(Math.max(0, age));
 }
 
+function setProcessingText(text) {
+  const el = document.querySelector('[data-route="processing"] .statusText');
+  if (el) el.textContent = text;
+}
+
 // --- Routing ---
 function show(route) {
-  $$(".view").forEach(v => v.classList.toggle("active", v.dataset.route === route));
-  // optional: stop camera when leaving scanner
-  if (route !== "scanner") stopScanner();
+  $$(".view").forEach((v) => v.classList.toggle("active", v.dataset.route === route));
+
+  // Keep camera running across scanner + photo preview only.
+  const keepCamera = route === "scanner" || route === "photoPreview";
+  if (!keepCamera) stopCameraOnly(); // stop stream, but keep captured image until we clear it explicitly
+
+  if (route === "scanner") setupScanner();
 }
 
 function go(route) {
   history.pushState({ route }, "", `#/${route}`);
   show(route);
-  if (route === "scanner") setupScanner();
+
   if (route === "bookingSummary") renderSummary();
   if (route === "paymentDetails") renderPayment();
   if (route === "paymentSuccess" || route === "paymentDeclined") renderPaymentResult();
   if (route === "receipt") renderReceipt();
+
+  // Reset processing text when arriving normally
+  if (route === "processing") setProcessingText("Payment Processing...");
 }
 function back() {
   history.back();
 }
+
 window.addEventListener("popstate", () => {
-  const route = (location.hash.replace("#/", "") || "dashboard");
+  const route = location.hash.replace("#/", "") || "dashboard";
   show(route);
-  if (route === "scanner") setupScanner();
 });
 
 // --- Toasts ---
@@ -83,7 +118,6 @@ function validateGuest() {
     if (!String(g[f] || "").trim()) errors[f] = "Required";
   }
   if (g.zip && !/^\d{5}$/.test(g.zip)) errors.zip = "ZIP must be 5 digits";
-  // Age is readonly. Ensure numeric.
   if (g.age && !/^\d+$/.test(g.age)) errors.age = "Invalid age";
 
   return { ok: Object.keys(errors).length === 0, errors };
@@ -91,8 +125,9 @@ function validateGuest() {
 
 function updateFieldStatuses(validation) {
   for (const f of requiredFields) {
-    const s = $(`[data-status-for="${f}"]`);
+    const s = document.querySelector(`[data-status-for="${f}"]`);
     if (!s) continue;
+
     const v = String(store.guest[f] || "").trim();
     if (!v) {
       s.className = "status empty";
@@ -110,14 +145,14 @@ function updateFieldStatuses(validation) {
 // --- Bind inputs to state ---
 function bind() {
   // Stay Details
-  $("#checkIn").addEventListener("change", e => store.stay.checkIn = e.target.value);
-  $("#checkOut").addEventListener("change", e => store.stay.checkOut = e.target.value);
-  $("#adults").addEventListener("change", e => store.stay.adults = e.target.value);
-  $("#children").addEventListener("change", e => store.stay.children = e.target.value);
-  $("#room").addEventListener("change", e => store.stay.room = e.target.value);
-  $("#rate").addEventListener("change", e => store.stay.rate = e.target.value);
-  $("#deposit").addEventListener("input", e => store.stay.deposit = Number(e.target.value || 0));
-  $("#discount").addEventListener("input", e => store.stay.discount = Number(e.target.value || 0));
+  $("#checkIn")?.addEventListener("change", (e) => (store.stay.checkIn = e.target.value));
+  $("#checkOut")?.addEventListener("change", (e) => (store.stay.checkOut = e.target.value));
+  $("#adults")?.addEventListener("change", (e) => (store.stay.adults = e.target.value));
+  $("#children")?.addEventListener("change", (e) => (store.stay.children = e.target.value));
+  $("#room")?.addEventListener("change", (e) => (store.stay.room = e.target.value));
+  $("#rate")?.addEventListener("change", (e) => (store.stay.rate = e.target.value));
+  $("#deposit")?.addEventListener("input", (e) => (store.stay.deposit = Number(e.target.value || 0)));
+  $("#discount")?.addEventListener("input", (e) => (store.stay.discount = Number(e.target.value || 0)));
 
   // Guest Registration
   const map = [
@@ -130,9 +165,13 @@ function bind() {
     ["idType", "idType"],
     ["idNumber", "idNumber"],
   ];
+
   for (const [id, key] of map) {
     const el = document.getElementById(id);
-    el.addEventListener(el.tagName === "SELECT" ? "change" : "input", () => {
+    if (!el) continue;
+
+    const evt = el.tagName === "SELECT" ? "change" : "input";
+    el.addEventListener(evt, () => {
       store.guest[key] = el.value;
       const v = validateGuest();
       updateFieldStatuses(v);
@@ -146,10 +185,8 @@ function bind() {
 
 // --- Flow handlers ---
 function stayNext() {
-  // Create booking ids now (prototype)
   store.booking.bookingId = randDigits(10);
   store.booking.roomNumber = store.stay.room || "000";
-
   go("guestRegistration");
 }
 
@@ -162,15 +199,13 @@ function guestNext() {
     return;
   }
 
-  // Compute totals
   const nights = daysBetween(store.stay.checkIn, store.stay.checkOut) || 1;
   const rate = Number(store.stay.rate || 0);
   const deposit = Number(store.stay.deposit || 0);
   const discount = Number(store.stay.discount || 0);
-  const total = Math.max(0, (nights * rate) + deposit - discount);
+  const total = Math.max(0, nights * rate + deposit - discount);
 
   store.booking.total = total;
-
   go("bookingSummary");
 }
 
@@ -182,10 +217,11 @@ function renderSummary() {
   $("#sumOut").textContent = store.stay.checkOut ? new Date(store.stay.checkOut).toDateString() : "Time and Date";
   $("#sumDays").textContent = String(daysBetween(store.stay.checkIn, store.stay.checkOut) || 0).padStart(2, "0");
   $("#sumRoom").textContent = store.booking.roomNumber || "000";
+
   const guestsCount = Number(store.stay.adults || 0) + Number(store.stay.children || 0);
   $("#sumGuests").textContent = String(guestsCount || 0).padStart(2, "0");
-  $("#sumBooking").textContent = store.booking.bookingId || "0000000000";
 
+  $("#sumBooking").textContent = store.booking.bookingId || "0000000000";
   $("#sumRate").textContent = money(store.stay.rate || 0);
   $("#sumDeposit").textContent = money(store.stay.deposit || 0);
   $("#sumDiscount").textContent = money(store.stay.discount || 0);
@@ -210,25 +246,25 @@ function renderSummary() {
 function renderPayment() {
   $("#payTotal").textContent = money(store.booking.total || 0);
 }
+
 function beginPayment(method) {
   store.payment.method = method;
   store.payment.status = "processing";
 
+  setProcessingText("Payment Processing...");
   go("processing");
 
-  // simulate processing time
   setTimeout(() => {
-    const outcome = store.mod.pay; // forced by moderator panel
-    store.payment.status = (outcome === "success") ? "success" : "declined";
+    const outcome = store.mod.pay;
+    store.payment.status = outcome === "success" ? "success" : "declined";
     store.booking.txnId = randDigits(14);
 
     go(store.payment.status === "success" ? "paymentSuccess" : "paymentDeclined");
   }, 1400);
 }
+
 function renderPaymentResult() {
-  const txnType = store.payment.method === "cash"
-    ? "Cash"
-    : "Debit/Credit/NFC";
+  const txnType = store.payment.method === "cash" ? "Cash" : "Debit/Credit/NFC";
 
   $("#succType").textContent = txnType;
   $("#succTxn").textContent = store.booking.txnId || randDigits(14);
@@ -244,13 +280,17 @@ function renderReceipt() {
   $("#rGuest").textContent = store.guest.fullName || "";
   $("#rRoom").textContent = store.booking.roomNumber || "";
   $("#rBooking").textContent = store.booking.bookingId || "";
-  $("#rPay").textContent = (store.payment.method || "").toUpperCase() || "CARD";
+  $("#rPay").textContent = (store.payment.method || "card").toUpperCase();
   $("#rTotal").textContent = money(store.booking.total || 0);
 }
 
 // --- Modals ---
-function openModal(id) { $(id).classList.remove("hidden"); }
-function closeModal(id) { $(id).classList.add("hidden"); }
+function openModal(id) {
+  $(id)?.classList.remove("hidden");
+}
+function closeModal(id) {
+  $(id)?.classList.add("hidden");
+}
 
 // --- Moderator panel ---
 let titleTapCount = 0;
@@ -258,111 +298,195 @@ let titleTapTimer = null;
 function handleTitleTap() {
   titleTapCount++;
   clearTimeout(titleTapTimer);
-  titleTapTimer = setTimeout(() => titleTapCount = 0, 900);
+  titleTapTimer = setTimeout(() => (titleTapCount = 0), 900);
   if (titleTapCount >= 5) {
-    $("#modPanel").classList.remove("hidden");
+    $("#modPanel")?.classList.remove("hidden");
     titleTapCount = 0;
   }
 }
 
-// --- Scanner (PDF417) ---
+// --- Scanner (Capture → Preview → Approve/Retake → Decode) ---
 let codeReader = null;
 let currentStream = null;
 let torchOn = false;
 
-async function setupScanner() {
-  const video = $("#video");
-  // Lazy init ZXing reader
-  if (window.ZXing) {
-    codeReader = codeReader || new ZXing.BrowserMultiFormatReader();
-  } else {
-    toast("error", "ZXing library not loaded. Use Sample ID.");
-  }
+// captured image state
+let capturedBlob = null;
+let capturedObjectUrl = null;
 
-  // Start camera preview even before decode
+// hidden capture canvas
+const captureCanvas = document.createElement("canvas");
+const captureCtx = captureCanvas.getContext("2d", { willReadFrequently: true });
+
+async function setupScanner() {
+  if (!window.ZXing) {
+    toast("error", "ZXing not loaded. Use Sample ID.");
+    return;
+  }
+  codeReader = codeReader || new ZXing.BrowserMultiFormatReader();
+
+  if (currentStream) return;
+
   try {
     currentStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" },
-      audio: false
+      video: {
+        facingMode: "environment",
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      },
+      audio: false,
     });
-    video.srcObject = currentStream;
+
+    const video = $("#video");
+    if (video) video.srcObject = currentStream;
+
+    // best-effort continuous focus (not universal)
+    const track = currentStream.getVideoTracks()[0];
+    const caps = track.getCapabilities?.();
+    if (caps?.focusMode?.includes("continuous")) {
+      await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] });
+    }
   } catch (e) {
-    toast("error", "Camera blocked. Use Sample ID.");
+    toast("error", "Camera blocked/unavailable. Use Sample ID.");
   }
 }
 
-function stopScanner() {
+// Stop ONLY the camera stream; do NOT clear captured image here.
+function stopCameraOnly() {
   const video = $("#video");
   if (video && video.srcObject) video.srcObject = null;
+
   if (currentStream) {
-    currentStream.getTracks().forEach(t => t.stop());
+    currentStream.getTracks().forEach((t) => t.stop());
     currentStream = null;
   }
   torchOn = false;
 }
 
+// Clear captured image when we’re done with it
+function clearCapture() {
+  if (capturedObjectUrl) {
+    URL.revokeObjectURL(capturedObjectUrl);
+    capturedObjectUrl = null;
+  }
+  capturedBlob = null;
+  const img = $("#previewImg");
+  if (img) img.src = "";
+}
+
 async function toggleTorch() {
-  if (!currentStream) { toast("error", "Camera not started."); return; }
+  if (!currentStream) {
+    toast("error", "Camera not started.");
+    return;
+  }
   const track = currentStream.getVideoTracks()[0];
   const caps = track.getCapabilities?.();
-  if (!caps || !caps.torch) { toast("error", "Torch not supported on this device."); return; }
+  if (!caps || !caps.torch) {
+    toast("error", "Torch not supported on this device.");
+    return;
+  }
 
   torchOn = !torchOn;
   await track.applyConstraints({ advanced: [{ torch: torchOn }] });
 }
 
-async function startScan() {
+async function capturePhoto() {
   if (store.mod.autofill === "fail") {
     toast("error", "Auto-fill failed. Please enter details manually.");
-    // stay on guestRegistration
+    clearCapture();
     go("guestRegistration");
-    const v = validateGuest();
-    updateFieldStatuses(v);
+    updateFieldStatuses(validateGuest());
     return;
   }
 
-  // If ZXing unavailable, fallback
-  if (!codeReader || !window.ZXing) {
-    useSampleId();
+  const video = $("#video");
+  if (!video || !currentStream) {
+    toast("error", "Camera not ready. Try again.");
     return;
   }
 
-  toast("success", "Scanning… hold barcode steady.");
+  if (!video.videoWidth || !video.videoHeight) {
+    toast("error", "Camera warming up… try again.");
+    return;
+  }
+
+  captureCanvas.width = video.videoWidth;
+  captureCanvas.height = video.videoHeight;
+  captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+
+  capturedBlob = await new Promise((resolve) => captureCanvas.toBlob(resolve, "image/jpeg", 0.92));
+  if (!capturedBlob) {
+    toast("error", "Could not capture image.");
+    return;
+  }
+
+  if (capturedObjectUrl) URL.revokeObjectURL(capturedObjectUrl);
+  capturedObjectUrl = URL.createObjectURL(capturedBlob);
+
+  const preview = $("#previewImg");
+  if (preview) preview.src = capturedObjectUrl;
+
+  go("photoPreview");
+}
+
+function retakePhoto() {
+  clearCapture();
+  go("scanner");
+}
+
+function backToScanner() {
+  go("scanner");
+}
+
+async function approvePhoto() {
+  if (store.mod.autofill === "fail") {
+    toast("error", "Auto-fill failed. Please enter details manually.");
+    clearCapture();
+    go("guestRegistration");
+    return;
+  }
+
+  if (!capturedObjectUrl) {
+    toast("error", "No photo captured. Retake.");
+    return;
+  }
+
+  if (!window.ZXing) {
+    toast("error", "Decoder not available. Use Sample ID.");
+    return;
+  }
+  codeReader = codeReader || new ZXing.BrowserMultiFormatReader();
+
+  // Show a processing screen (reusing your existing processing view)
+  setProcessingText("Processing image...");
+  go("processing");
+
   try {
-    // Decode once from current stream
-    const deviceId = undefined;
-    const result = await codeReader.decodeOnceFromVideoDevice(deviceId, "video");
+    const result = await codeReader.decodeFromImageUrl(capturedObjectUrl);
     const raw = result?.text || "";
 
     const parsed = parseAAMVA(raw);
     if (!parsed || (!parsed.fullName && !parsed.idNumber)) {
-      toast("error", "Could not parse barcode. Using manual entry.");
-      go("guestRegistration");
+      toast("error", "Could not read barcode. Retake or enter manually.");
+      go("photoPreview");
       return;
     }
 
     autofillGuest(parsed);
+
+    // After autofill, clean up capture + stop camera
+    clearCapture();
+    stopCameraOnly();
+
     go("scanSuccess");
     setTimeout(() => go("guestRegistration"), 650);
-
-  } catch (e) {
-    toast("error", "Scan failed. Try again or use Sample ID.");
+  } catch (err) {
+    toast("error", "Barcode not detected. Retake photo or enter manually.");
+    go("photoPreview");
   }
-}
-
-function useSampleId() {
-  if (store.mod.autofill === "fail") {
-    toast("error", "Auto-fill failed. Please enter details manually.");
-    go("guestRegistration");
-    return;
-  }
-  autofillGuest(sampleGuest());
-  go("scanSuccess");
-  setTimeout(() => go("guestRegistration"), 650);
 }
 
 function sampleGuest() {
-  // You can customize to your test personas
   const dobISO = "1996-05-14";
   return {
     fullName: "Jane Doe",
@@ -373,10 +497,25 @@ function sampleGuest() {
     gender: "Female",
     dobISO,
     idType: "Driver's License",
-    idNumber: "0134236894"
+    idNumber: "0134236894",
   };
 }
 
+function useSampleId() {
+  if (store.mod.autofill === "fail") {
+    toast("error", "Auto-fill failed. Please enter details manually.");
+    clearCapture();
+    go("guestRegistration");
+    return;
+  }
+  autofillGuest(sampleGuest());
+  clearCapture();
+  stopCameraOnly();
+  go("scanSuccess");
+  setTimeout(() => go("guestRegistration"), 650);
+}
+
+// --- Autofill ---
 function autofillGuest(p) {
   store.guest.fullName = p.fullName || store.guest.fullName;
   store.guest.street = p.street || store.guest.street;
@@ -392,7 +531,7 @@ function autofillGuest(p) {
     store.guest.age = calcAgeFromDob(p.dobISO);
   }
 
-  // Push into UI fields
+  // Push to UI
   $("#fullName").value = store.guest.fullName;
   $("#street").value = store.guest.street;
   $("#city").value = store.guest.city;
@@ -409,30 +548,30 @@ function autofillGuest(p) {
 }
 
 // --- AAMVA parser (basic) ---
-// Extracts common fields from PDF417 payload.
-// Works for many US licenses but not perfect (good enough for prototyping).
+// Good enough for prototyping; US licenses vary by issuer/version.
 function parseAAMVA(raw) {
   if (!raw || typeof raw !== "string") return null;
 
-  // Often data includes newlines or record separators
-  const lines = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const lines = raw
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   const get = (code) => {
-    // Many payloads contain like "DAAJOHN,DOE"
-    const found = lines.find(l => l.startsWith(code));
+    const found = lines.find((l) => l.startsWith(code));
     return found ? found.slice(code.length).trim() : "";
   };
 
-  const lastFirstMiddle = get("DAA"); // LAST,FIRST,MIDDLE
+  // Name
+  const daa = get("DAA"); // LAST,FIRST,MIDDLE
   let fullName = "";
-  if (lastFirstMiddle) {
-    const parts = lastFirstMiddle.split(",");
+  if (daa) {
+    const parts = daa.split(",");
     const last = (parts[0] || "").trim();
     const first = (parts[1] || "").trim();
     const mid = (parts[2] || "").trim();
     fullName = [first, mid, last].filter(Boolean).join(" ");
   } else {
-    // Sometimes separate fields:
     const first = get("DAC");
     const last = get("DCS");
     const mid = get("DAD");
@@ -443,7 +582,7 @@ function parseAAMVA(raw) {
   const city = get("DAI");
   const state = get("DAJ");
   const zip = get("DAK");
-  const sex = get("DBC"); // 1=Male 2=Female (commonly)
+  const sex = get("DBC"); // often 1=Male 2=Female
   const dob = get("DBB"); // YYYYMMDD or MMDDYYYY
   const idNumber = get("DAQ");
 
@@ -460,7 +599,7 @@ function parseAAMVA(raw) {
     gender,
     dobISO,
     idType: "Driver's License",
-    idNumber
+    idNumber,
   };
 }
 
@@ -468,18 +607,47 @@ function normalizeDob(d) {
   const digits = (d || "").replace(/\D/g, "");
   if (digits.length !== 8) return "";
   const a = Number(digits.slice(0, 4));
-  // If first 4 digits look like a year, assume YYYYMMDD
+
+  // YYYYMMDD
   if (a > 1900 && a < 2100) {
     const y = digits.slice(0, 4);
     const m = digits.slice(4, 6);
     const day = digits.slice(6, 8);
     return `${y}-${m}-${day}`;
   }
-  // else MMDDYYYY
+  // MMDDYYYY
   const m = digits.slice(0, 2);
   const day = digits.slice(2, 4);
   const y = digits.slice(4, 8);
   return `${y}-${m}-${day}`;
+}
+
+// --- Guest clear + share ---
+function clearGuest() {
+  store.guest = { fullName: "", street: "", city: "", state: "", zip: "", gender: "", age: "", idType: "", idNumber: "", dob: "" };
+
+  $("#fullName").value = "";
+  $("#street").value = "";
+  $("#city").value = "";
+  $("#state").value = "";
+  $("#zip").value = "";
+  $("#gender").value = "";
+  $("#age").value = "";
+  $("#idType").value = "";
+  $("#idNumber").value = "";
+
+  updateFieldStatuses(validateGuest());
+  toast("success", "Guest cleared.");
+}
+
+async function shareReceipt() {
+  const text = `Receipt - ${store.guest.fullName}\nRoom: ${store.booking.roomNumber}\nTotal: ${money(store.booking.total)}`;
+  try {
+    if (navigator.share) await navigator.share({ title: "Receipt", text });
+    else toast("error", "Web Share not supported on this device.");
+  } catch {
+    // user canceled
+  }
 }
 
 // --- Event delegation ---
@@ -494,66 +662,70 @@ document.addEventListener("click", (e) => {
   if (act === "stayNext") return stayNext();
   if (act === "guestNext") return guestNext();
 
-  if (act === "payCash") { store.payment.method = "cash"; openModal("#cashModal"); return; }
-  if (act === "payCard") { store.payment.method = "card"; go("paymentDetails"); return; }
-
+  // Payments
+  if (act === "payCash") {
+    store.payment.method = "cash";
+    openModal("#cashModal");
+    return;
+  }
+  if (act === "payCard") {
+    store.payment.method = "card";
+    go("paymentDetails");
+    return;
+  }
   if (act === "closeCashModal") return closeModal("#cashModal");
-  if (act === "confirmCash") { closeModal("#cashModal"); beginPayment("cash"); return; }
-
+  if (act === "confirmCash") {
+    closeModal("#cashModal");
+    beginPayment("cash");
+    return;
+  }
   if (act === "tapToPay") return beginPayment("card");
   if (act === "proceedPay") return beginPayment("card");
 
   if (act === "changeMethod") return go("bookingSummary");
   if (act === "retryPay") return beginPayment(store.payment.method || "card");
 
+  // Receipt
   if (act === "printReceipt") return printReceipt();
   if (act === "receiptPrinted") return openModal("#receiptModal");
-  if (act === "doneReceipt") { closeModal("#receiptModal"); go("dashboard"); return; }
+  if (act === "doneReceipt") {
+    closeModal("#receiptModal");
+    go("dashboard");
+    return;
+  }
   if (act === "shareReceipt") return shareReceipt();
 
+  // Moderator panel
   if (act === "openModPanel") return handleTitleTap();
-  if (act === "modClose") return $("#modPanel").classList.add("hidden");
+  if (act === "modClose") return $("#modPanel")?.classList.add("hidden");
 
-  if (act === "setAutofill") { store.mod.autofill = btn.dataset.value; toast("success", `Autofill: ${store.mod.autofill}`); return; }
-  if (act === "setPay") { store.mod.pay = btn.dataset.value; toast("success", `Payment: ${store.mod.pay}`); return; }
-  if (act === "fillSampleGuest") { autofillGuest(sampleGuest()); return; }
-  if (act === "clearGuest") { clearGuest(); return; }
-
-  if (act === "toggleTorch") return toggleTorch();
-  if (act === "startScan") return startScan();
-  if (act === "useSampleId") return useSampleId();
-});
-
-function clearGuest() {
-  store.guest = { fullName:"", street:"", city:"", state:"", zip:"", gender:"", age:"", idType:"", idNumber:"", dob:"" };
-  $("#fullName").value = "";
-  $("#street").value = "";
-  $("#city").value = "";
-  $("#state").value = "";
-  $("#zip").value = "";
-  $("#gender").value = "";
-  $("#age").value = "";
-  $("#idType").value = "";
-  $("#idNumber").value = "";
-  updateFieldStatuses(validateGuest());
-  toast("success", "Guest cleared.");
-}
-
-// Share receipt (best-effort)
-async function shareReceipt() {
-  const text = `Receipt - ${store.guest.fullName}\nRoom: ${store.booking.roomNumber}\nTotal: ${money(store.booking.total)}`;
-  try {
-    if (navigator.share) await navigator.share({ title: "Receipt", text });
-    else toast("error", "Web Share not supported on this device.");
-  } catch {
-    // user canceled share
+  if (act === "setAutofill") {
+    store.mod.autofill = btn.dataset.value;
+    toast("success", `Autofill: ${store.mod.autofill}`);
+    return;
   }
-}
+  if (act === "setPay") {
+    store.mod.pay = btn.dataset.value;
+    toast("success", `Payment: ${store.mod.pay}`);
+    return;
+  }
+  if (act === "fillSampleGuest") return autofillGuest(sampleGuest());
+  if (act === "clearGuest") return clearGuest();
+
+  // Scanner actions (capture → preview → approve/retake)
+  if (act === "toggleTorch") return toggleTorch();
+  if (act === "capturePhoto") return capturePhoto();
+  if (act === "retakePhoto") return retakePhoto();
+  if (act === "approvePhoto") return approvePhoto();
+  if (act === "backToScanner") return backToScanner();
+  if (act === "useSampleId") return useSampleId();
+
+  // no-op
+  if (act === "noop") return;
+});
 
 // --- Init ---
 bind();
-show((location.hash.replace("#/", "") || "dashboard"));
-history.replaceState({ route: (location.hash.replace("#/", "") || "dashboard") }, "", location.hash || "#/dashboard");
-
-// Ensure statuses reflect initial
+show(location.hash.replace("#/", "") || "dashboard");
+history.replaceState({ route: location.hash.replace("#/", "") || "dashboard" }, "", location.hash || "#/dashboard");
 updateFieldStatuses(validateGuest());
