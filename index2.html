@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>PDF417 Scanner (Vanilla JS + js-zxing-pdf417)</title>
+  <style>
+    :root { color-scheme: dark light; }
+    body {
+      margin: 0;
+      font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: #0b0c10;
+      color: #e9eef6;
+    }
+    header {
+      padding: 16px 16px 10px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      position: sticky;
+      top: 0;
+      background: linear-gradient(to bottom, rgba(11,12,16,.98), rgba(11,12,16,.86));
+      backdrop-filter: blur(10px);
+      z-index: 10;
+    }
+    header h1 {
+      margin: 0 0 6px;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: .2px;
+    }
+    header p {
+      margin: 0;
+      font-size: 13px;
+      opacity: .8;
+      line-height: 1.35;
+    }
+
+    .wrap { padding: 14px 16px 20px; max-width: 860px; margin: 0 auto; }
+    .card {
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.03);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+
+    .videoShell { position: relative; aspect-ratio: 3/4; background: #000; }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      background: #000;
+    }
+
+    /* Simple “scan area” guide */
+    .guide {
+      position: absolute;
+      inset: 12%;
+      border: 2px solid rgba(255,255,255,.55);
+      border-radius: 18px;
+      box-shadow: 0 0 0 4000px rgba(0,0,0,.25);
+      pointer-events: none;
+    }
+    .guide::after {
+      content: "";
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      top: 50%;
+      height: 2px;
+      background: rgba(90, 200, 250, .8);
+      transform: translateY(-50%);
+      box-shadow: 0 0 18px rgba(90, 200, 250, .8);
+      animation: sweep 1.4s ease-in-out infinite;
+    }
+    @keyframes sweep {
+      0%,100% { opacity: .35; }
+      50% { opacity: 1; }
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 12px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      background: rgba(0,0,0,.15);
+    }
+    button {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: #e9eef6;
+      padding: 12px 12px;
+      border-radius: 14px;
+      font-weight: 650;
+      font-size: 14px;
+      letter-spacing: .2px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    button.primary { background: rgba(90,200,250,.14); border-color: rgba(90,200,250,.35); }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .status, .result {
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.03);
+      border-radius: 16px;
+      padding: 12px;
+    }
+    .label { font-size: 12px; opacity: .75; margin-bottom: 6px; }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .hint {
+      font-size: 12px;
+      opacity: .72;
+      line-height: 1.4;
+      margin-top: 10px;
+    }
+
+    /* Offscreen canvas */
+    canvas { display: none; }
+  </style>
+
+  <!-- BigInteger dependency (required by this library port) -->
+  <script src="https://gist.githubusercontent.com/ix4/21b828b250cc8b97cea83f6a5f6b0f06/raw/5ba2fae5d114eec8c6991cb56ffb0acba361d436/BigInteger.min.js"></script>
+
+  <!-- PDF417 decoder port (PeculiarVentures/js-zxing-pdf417 dist build) -->
+  <script src="https://raw.githubusercontent.com/PeculiarVentures/js-zxing-pdf417/master/dist/zxing-pdf417.min.js"></script>
+</head>
+
+<body>
+  <header>
+    <h1>PDF417 Scanner (iPhone Safari)</h1>
+    <p>Point the camera at a PDF417 barcode (e.g., back of ID). Good lighting + sharp focus matters.</p>
+  </header>
+
+  <div class="wrap">
+    <div class="card">
+      <div class="videoShell">
+        <video id="video" playsinline muted></video>
+        <div class="guide" aria-hidden="true"></div>
+      </div>
+
+      <div class="controls">
+        <button id="startBtn" class="primary">Start camera</button>
+        <button id="stopBtn" disabled>Stop</button>
+        <button id="torchBtn" disabled>Toggle torch</button>
+        <button id="copyBtn" disabled>Copy result</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="status">
+        <div class="label">Status</div>
+        <div id="status" class="mono">Idle.</div>
+      </div>
+
+      <div class="result">
+        <div class="label">Decoded text</div>
+        <div id="result" class="mono">(none)</div>
+      </div>
+
+      <div class="hint">
+        Tips: hold steady • fill the guide box • avoid glare • try higher resolution (rear camera) • if it won’t scan, move slightly farther away so the barcode is sharp.
+      </div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const torchBtn = document.getElementById("torchBtn");
+    const copyBtn = document.getElementById("copyBtn");
+
+    const statusEl = document.getElementById("status");
+    const resultEl = document.getElementById("result");
+
+    let stream = null;
+    let scanning = false;
+    let scanTimer = null;
+    let lastText = "";
+    let track = null;
+    let torchOn = false;
+
+    function setStatus(msg) {
+      statusEl.textContent = msg;
+    }
+
+    function setResult(text) {
+      lastText = text || "";
+      resultEl.textContent = text || "(none)";
+      copyBtn.disabled = !text;
+    }
+
+    async function startCamera() {
+      setResult("");
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus("Error: getUserMedia not available in this browser.");
+        return;
+      }
+
+      try {
+        // iOS Safari: HTTPS required + user gesture (button click) required.
+        const constraints = {
+          audio: false,
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        };
+
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        await video.play();
+
+        track = stream.getVideoTracks()[0];
+
+        setStatus("Camera started. Scanning…");
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+
+        // Torch support is device/browser dependent.
+        torchBtn.disabled = !(track?.getCapabilities && track.getCapabilities().torch);
+
+        startScanningLoop();
+      } catch (err) {
+        setStatus("Camera error: " + (err?.message || String(err)));
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        torchBtn.disabled = true;
+      }
+    }
+
+    function stopCamera() {
+      stopScanningLoop();
+
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+      }
+      stream = null;
+      track = null;
+      torchOn = false;
+
+      video.srcObject = null;
+
+      setStatus("Stopped.");
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      torchBtn.disabled = true;
+    }
+
+    function startScanningLoop() {
+      if (scanning) return;
+      scanning = true;
+
+      // Throttle scanning to reduce CPU (PDF417 is heavy).
+      scanTimer = setInterval(() => {
+        if (!scanning) return;
+        scanOnce();
+      }, 250); // ~4 scans/sec
+    }
+
+    function stopScanningLoop() {
+      scanning = false;
+      if (scanTimer) clearInterval(scanTimer);
+      scanTimer = null;
+    }
+
+    function drawFrameToCanvas() {
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      if (!vw || !vh) return false;
+
+      // Keep enough resolution to decode PDF417 reliably.
+      // If camera is huge, cap to ~1280px wide to limit CPU.
+      const maxW = 1280;
+      const scale = Math.min(1, maxW / vw);
+      const w = Math.floor(vw * scale);
+      const h = Math.floor(vh * scale);
+
+      canvas.width = w;
+      canvas.height = h;
+
+      ctx.drawImage(video, 0, 0, w, h);
+      return true;
+    }
+
+    function scanOnce() {
+      try {
+        if (!drawFrameToCanvas()) return;
+
+        // NOTE: This library’s BitmapLuminanceSource can take ImageData.
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+        const source = new ZXing.BitmapLuminanceSource(imageData);
+        const binarizer = new ZXing.Common.HybridBinarizer(source);
+        const bitmap = new ZXing.BinaryBitmap(binarizer);
+
+        // decode(bitmap, hints, multiple)
+        const res = ZXing.PDF417.PDF417Reader.decode(bitmap, null, false);
+
+        if (res && res.length) {
+          const text = res[0]?.Text ?? JSON.stringify(res[0], null, 2);
+          if (text && text !== lastText) {
+            setResult(text);
+            setStatus("✅ Decoded. (Stopped scanning)");
+            stopScanningLoop(); // stop after success; remove if you want continuous scanning
+          }
+        }
+      } catch (err) {
+        // Most frames won't decode — keep status quiet unless you want verbose logs.
+        // setStatus("Scanning… (no decode yet)");
+      }
+    }
+
+    async function toggleTorch() {
+      if (!track?.getCapabilities) return;
+
+      const caps = track.getCapabilities();
+      if (!caps.torch) {
+        setStatus("Torch not supported on this device/browser.");
+        torchBtn.disabled = true;
+        return;
+      }
+
+      try {
+        torchOn = !torchOn;
+        await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+        setStatus(torchOn ? "Torch ON. Scanning…" : "Torch OFF. Scanning…");
+      } catch (err) {
+        setStatus("Torch error: " + (err?.message || String(err)));
+      }
+    }
+
+    async function copyResult() {
+      if (!lastText) return;
+      try {
+        await navigator.clipboard.writeText(lastText);
+        setStatus("Copied decoded text to clipboard.");
+      } catch {
+        // Fallback
+        const ta = document.createElement("textarea");
+        ta.value = lastText;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+        setStatus("Copied decoded text (fallback).");
+      }
+    }
+
+    startBtn.addEventListener("click", startCamera);
+    stopBtn.addEventListener("click", stopCamera);
+    torchBtn.addEventListener("click", toggleTorch);
+    copyBtn.addEventListener("click", copyResult);
+
+    // Safety: stop camera if page hides
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && stream) stopCamera();
+    });
+  </script>
+</body>
+</html>
