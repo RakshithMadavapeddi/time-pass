@@ -1,571 +1,619 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Hotel Check-in Prototype</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hotel Check-In Flow</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="app">
-    <!-- Toast container -->
-    <div id="toasts" class="toasts" aria-live="polite" aria-atomic="true"></div>
 
-    <!-- Moderator panel (hidden) -->
-    <div id="modPanel" class="modpanel hidden" role="dialog" aria-modal="true">
-      <div class="modpanel__card">
-        <div class="row between center">
-          <h3>Moderator Controls</h3>
-          <button class="iconbtn" data-action="modClose" aria-label="Close">✕</button>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="stack">
-          <label class="label">Autofill outcome</label>
-          <div class="seg">
-            <button class="seg__btn" data-action="setAutofill" data-value="success">Success</button>
-            <button class="seg__btn" data-action="setAutofill" data-value="fail">Fail</button>
-          </div>
-
-          <label class="label">Payment outcome</label>
-          <div class="seg">
-            <button class="seg__btn" data-action="setPay" data-value="success">Success</button>
-            <button class="seg__btn" data-action="setPay" data-value="declined">Declined</button>
-          </div>
-
-          <label class="label">Quick actions</label>
-          <div class="grid2">
-            <button class="btn secondary" data-action="fillSampleGuest">Fill Sample Guest</button>
-            <button class="btn secondary" data-action="clearGuest">Clear Guest</button>
-          </div>
-        </div>
+  <!-- =============== 0) DASHBOARD =============== -->
+  <section id="dashboard" class="screen active" aria-label="Dashboard">
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="title">Example XYZ Hotels</h1>
       </div>
-    </div>
-
-    <!-- Modal: Record Cash Payment -->
-    <div id="cashModal" class="modal hidden" role="dialog" aria-modal="true">
-      <div class="modal__sheet">
-        <div class="modal__hero success">
-          <div class="modal__icon">💲</div>
-          <div class="modal__title">Record Cash Payment</div>
-        </div>
-        <div class="modal__body">
-          <div class="row between">
-            <div class="bold">Total Amount</div>
-            <div id="cashTotal" class="bold">$0.00</div>
-          </div>
-        </div>
-        <div class="modal__actions">
-          <button class="btn secondary" data-action="closeCashModal">Cancel</button>
-          <button class="btn primary" data-action="confirmCash">Yes</button>
-        </div>
+      <div class="topbar-right">
+        <button class="icon-btn" type="button" aria-label="Profile" data-action="profile">👤</button>
+        <button class="icon-btn" type="button" aria-label="Logout" data-action="logout">⎋</button>
       </div>
-    </div>
+    </header>
 
-    <!-- Modal: Receipt Printed -->
-    <div id="receiptModal" class="modal hidden" role="dialog" aria-modal="true">
-      <div class="modal__sheet">
-        <div class="modal__hero neutral">
-          <div class="modal__icon">🧾</div>
-          <div class="modal__title">Receipt Printed</div>
-        </div>
-        <div class="modal__actions">
-          <button class="btn secondary" data-action="shareReceipt">Share</button>
-          <button class="btn primary" data-action="doneReceipt">Done</button>
-        </div>
+    <main class="content">
+      <p class="greeting" id="dashboardGreeting">Good Afternoon, John Doe.</p>
+
+      <button class="tile tile-primary" type="button" data-nav="guestRegistration">Check-In</button>
+      <button class="tile tile-disabled" type="button" disabled aria-disabled="true">Check-Out</button>
+      <button class="tile tile-disabled" type="button" disabled aria-disabled="true">Stay-Over</button>
+
+      <div class="divider"><span>Other</span></div>
+
+      <div class="grid-2">
+        <button class="tile tile-muted" type="button" data-action="other">Dashboard</button>
+        <button class="tile tile-muted" type="button" data-action="other">Bookings</button>
       </div>
-    </div>
 
-    <!-- App shell -->
-    <main class="screen">
-      <!-- VIEWS -->
-      <section class="view active" data-route="dashboard">
-        <header class="topbar">
-          <div class="topbar__title" data-action="openModPanel">Example XYZ Hotels</div>
-          <div class="topbar__right">
-            <button class="iconbtn" aria-label="Profile">👤</button>
-            <button class="iconbtn" aria-label="Logout">⎋</button>
-          </div>
-        </header>
-
-        <div class="content">
-          <div class="greeting">Good Afternoon, John Doe.</div>
-
-          <div class="bigcard" data-action="go" data-to="stayDetails">Check-In</div>
-          <div class="bigcard muted">Check-Out</div>
-          <div class="bigcard muted">Stay-Over</div>
-
-          <div class="orRow"><span></span><div>Other</div><span></span></div>
-
-          <div class="grid2">
-            <div class="tile muted">Dashboard</div>
-            <div class="tile muted">Bookings</div>
-            <div class="tile muted">Reports</div>
-            <div class="tile muted">Payments</div>
-          </div>
-
-          <div class="version">Version 1.0</div>
-        </div>
-      </section>
-
-      <section class="view" data-route="stayDetails">
-        <header class="topbar">
-          <button class="iconbtn" data-action="back" aria-label="Back">←</button>
-          <div class="topbar__title">Stay Details</div>
-          <button class="iconbtn" data-action="go" data-to="dashboard" aria-label="Close">✕</button>
-        </header>
-
-        <div class="content">
-          <div class="grid2">
-            <div class="field">
-              <label class="label">Check-in</label>
-              <div class="inputrow">
-                <input id="checkIn" type="date" />
-              </div>
-            </div>
-            <div class="field">
-              <label class="label">Check-out</label>
-              <div class="inputrow">
-                <input id="checkOut" type="date" />
-              </div>
-            </div>
-          </div>
-
-          <div class="grid2">
-            <div class="field">
-              <label class="label">Adults</label>
-              <select id="adults">
-                <option value="">Select</option>
-                <option>1</option><option>2</option><option>3</option><option>4</option>
-              </select>
-            </div>
-            <div class="field">
-              <label class="label">Children</label>
-              <select id="children">
-                <option value="">Select</option>
-                <option>0</option><option>1</option><option>2</option><option>3</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="field">
-            <label class="label">Select Room</label>
-            <select id="room">
-              <option value="">Select</option>
-              <option value="101">101</option>
-              <option value="202">202</option>
-              <option value="305">305</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label class="label">Daily Rate</label>
-            <select id="rate">
-              <option value="">Select</option>
-              <option value="89.00">$89.00</option>
-              <option value="109.00">$109.00</option>
-              <option value="129.00">$129.00</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label class="label">Deposit</label>
-            <input id="deposit" type="number" placeholder="Enter Deposit" inputmode="decimal" />
-          </div>
-
-          <div class="field">
-            <label class="label">Discount</label>
-            <input id="discount" type="number" placeholder="Enter Discount Amount" inputmode="decimal" />
-          </div>
-
-          <div class="footer">
-            <button class="btn primary" data-action="stayNext">Next</button>
-          </div>
-        </div>
-      </section>
-
-      <section class="view" data-route="guestRegistration">
-        <header class="topbar">
-          <button class="iconbtn" data-action="back" aria-label="Back">←</button>
-          <div class="topbar__title">Guest Registration</div>
-          <button class="iconbtn" data-action="go" data-to="scanner" aria-label="Scan">▥</button>
-        </header>
-
-        <div class="content">
-          <div class="progress"></div>
-
-          <div class="field">
-            <div class="labelRow">
-              <label class="label req">Full Name</label>
-              <span class="status" data-status-for="fullName"></span>
-            </div>
-            <input id="fullName" type="text" placeholder="Enter Full Name" />
-          </div>
-
-          <div class="field">
-            <div class="labelRow">
-              <label class="label req">Street Address</label>
-              <span class="status" data-status-for="street"></span>
-            </div>
-            <input id="street" type="text" placeholder="Enter Street Address" />
-          </div>
-
-          <div class="field">
-            <div class="labelRow">
-              <label class="label req">City</label>
-              <span class="status" data-status-for="city"></span>
-            </div>
-            <input id="city" type="text" placeholder="Enter City" />
-          </div>
-
-          <div class="grid2">
-            <div class="field">
-              <div class="labelRow">
-                <label class="label req">State</label>
-                <span class="status" data-status-for="state"></span>
-              </div>
-              <select id="state">
-                <option value="">Select</option>
-                <option value="LA">LA</option>
-                <option value="TX">TX</option>
-                <option value="CA">CA</option>
-              </select>
-            </div>
-            <div class="field">
-              <div class="labelRow">
-                <label class="label req">Zip Code</label>
-                <span class="status" data-status-for="zip"></span>
-              </div>
-              <input id="zip" type="text" placeholder="5-digit ZIP code" inputmode="numeric" />
-            </div>
-          </div>
-
-          <div class="grid2">
-            <div class="field">
-              <div class="labelRow">
-                <label class="label req">Gender</label>
-                <span class="status" data-status-for="gender"></span>
-              </div>
-              <select id="gender">
-                <option value="">Select</option>
-                <option value="Female">Female</option>
-                <option value="Male">Male</option>
-                <option value="X">X</option>
-              </select>
-            </div>
-            <div class="field">
-              <div class="labelRow">
-                <label class="label req">Age</label>
-                <span class="status" data-status-for="age"></span>
-              </div>
-              <input id="age" type="text" placeholder="00" readonly />
-            </div>
-          </div>
-
-          <div class="field">
-            <div class="labelRow">
-              <label class="label req">Type of Identification</label>
-              <span class="status" data-status-for="idType"></span>
-            </div>
-            <select id="idType">
-              <option value="">Select</option>
-              <option value="Driver's License">Driver’s License</option>
-              <option value="ID">ID</option>
-              <option value="Passport">Passport</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <div class="labelRow">
-              <label class="label req">Identification Number</label>
-              <span class="status" data-status-for="idNumber"></span>
-            </div>
-            <input id="idNumber" type="text" placeholder="0000000000" />
-          </div>
-
-          <div class="footer">
-            <button class="btn primary" data-action="guestNext">Next</button>
-          </div>
-        </div>
-      </section>
-
-    <section class="view" data-route="scanner">
-  <header class="topbar">
-    <button class="iconbtn" data-action="back" aria-label="Back">←</button>
-    <div class="topbar__title">Scanner</div>
-    <button class="iconbtn" data-action="toggleTorch" aria-label="Torch">⚡</button>
-  </header>
-
-  <div class="scannerWrap">
-    <video id="video" class="scannerVideo" autoplay playsinline></video>
-    <div class="scannerGrid" aria-hidden="true"></div>
-
-    <div class="scannerFooter">
-      <button class="scanHint" data-action="useSampleId">Use Sample ID</button>
-      <button class="shutter" data-action="capturePhoto" aria-label="Capture photo"></button>
-    </div>
-  </div>
-</section>
-
-<section class="view" data-route="photoPreview">
-  <header class="topbar">
-    <button class="iconbtn" data-action="backToScanner" aria-label="Back">←</button>
-    <div class="topbar__title">Photo Preview</div>
-    <span></span>
-  </header>
-
-  <div class="previewWrap">
-    <img id="previewImg" class="previewImg" alt="Captured barcode preview" />
-
-    <div class="footer split">
-      <button class="btn secondary" data-action="retakePhoto">Retake</button>
-      <button class="btn primary" data-action="approvePhoto">Done</button>
-    </div>
-  </div>
-</section>
-
-      <section class="view" data-route="scanSuccess">
-        <header class="topbar">
-          <button class="iconbtn" data-action="back" aria-label="Back">←</button>
-          <div class="topbar__title"> </div>
-          <span></span>
-        </header>
-        <div class="statusFull success">
-          <div class="statusIcon">✓</div>
-          <div class="statusText">Scanning Successful</div>
-        </div>
-      </section>
-
-      <section class="view" data-route="bookingSummary">
-        <header class="topbar">
-          <button class="iconbtn" data-action="back" aria-label="Back">←</button>
-          <div class="topbar__title">Booking Summary</div>
-          <button class="iconbtn" data-action="go" data-to="dashboard" aria-label="Close">✕</button>
-        </header>
-
-        <div class="content">
-          <div class="progress"></div>
-
-          <div class="card">
-            <div class="row between">
-              <div class="bold">Guest</div>
-              <div id="sumGuest">Full Name</div>
-            </div>
-            <div class="row between">
-              <div class="bold">Check-in</div>
-              <div id="sumIn">Time and Date</div>
-            </div>
-            <div class="row between">
-              <div class="bold">Check-out</div>
-              <div id="sumOut">Time and Date</div>
-            </div>
-
-            <div class="row between">
-              <div class="bold">No. of Days</div>
-              <div id="sumDays">00</div>
-            </div>
-            <div class="row between">
-              <div class="bold">Room Number</div>
-              <div id="sumRoom">000</div>
-            </div>
-            <div class="row between">
-              <div class="bold">Guests</div>
-              <div id="sumGuests">00</div>
-            </div>
-
-            <div class="divider"></div>
-
-            <div class="row between">
-              <div class="bold">Booking ID</div>
-              <div id="sumBooking">0000000000</div>
-            </div>
-
-            <div class="row between">
-              <div class="bold">Daily Rate</div>
-              <div id="sumRate">$0.00</div>
-            </div>
-            <div class="row between">
-              <div class="bold">Deposit</div>
-              <div id="sumDeposit">$0.00</div>
-            </div>
-            <div class="row between">
-              <div class="bold">Discount</div>
-              <div id="sumDiscount">$0.00</div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="row between">
-              <div class="bold">Total Amount</div>
-              <div id="sumTotal" class="bold">$0.00</div>
-            </div>
-          </div>
-
-          <div class="footer split">
-            <button class="btn success" data-action="payCash">Cash</button>
-            <button class="btn primary" data-action="payCard">Card</button>
-          </div>
-        </div>
-      </section>
-
-      <section class="view" data-route="paymentDetails">
-        <header class="topbar">
-          <button class="iconbtn" data-action="back" aria-label="Back">←</button>
-          <div class="topbar__title">Payment Details</div>
-          <button class="iconbtn" data-action="go" data-to="bookingSummary" aria-label="Close">✕</button>
-        </header>
-
-        <div class="content">
-          <div class="card">
-            <div class="row between">
-              <div class="bold">Total Amount</div>
-              <div id="payTotal" class="bold">$0.00</div>
-            </div>
-          </div>
-
-          <button class="tapbtn" data-action="tapToPay">
-            <span class="tapicon">)))</span>
-            <span>Tap to Pay</span>
-          </button>
-
-          <div class="orRow"><span></span><div>or</div><span></span></div>
-
-          <div class="field">
-            <label class="label">Card Number</label>
-            <input id="cardNumber" type="text" placeholder="Enter Card Number" inputmode="numeric" />
-          </div>
-
-          <div class="grid2">
-            <div class="field">
-              <label class="label">Expiry Date</label>
-              <input id="expiry" type="text" placeholder="MM/YY" inputmode="numeric" />
-            </div>
-            <div class="field">
-              <label class="label">CVV/CVC</label>
-              <input id="cvv" type="password" placeholder="000" inputmode="numeric" />
-            </div>
-          </div>
-
-          <div class="field">
-            <label class="label">Name on Card</label>
-            <input id="nameOnCard" type="text" placeholder="Enter Name on Card" />
-          </div>
-
-          <div class="field">
-            <label class="label">Zip Code</label>
-            <input id="billZip" type="text" placeholder="00000" inputmode="numeric" />
-          </div>
-
-          <div class="footer">
-            <button class="btn primary" data-action="proceedPay">Proceed to Pay</button>
-          </div>
-        </div>
-      </section>
-
-      <section class="view" data-route="processing">
-        <header class="topbar">
-          <button class="iconbtn" data-action="back" aria-label="Back">←</button>
-          <div class="topbar__title"></div>
-          <button class="iconbtn" data-action="noop" aria-label="Close"> </button>
-        </header>
-        <div class="statusFull neutral">
-          <div class="statusIcon">▦</div>
-          <div class="statusText">Payment Processing...</div>
-        </div>
-      </section>
-
-      <section class="view" data-route="paymentDeclined">
-        <header class="topbar">
-          <button class="iconbtn" data-action="back" aria-label="Back">←</button>
-          <div class="topbar__title"></div>
-          <button class="iconbtn" data-action="go" data-to="paymentDetails" aria-label="Close">✕</button>
-        </header>
-
-        <div class="statusFull declined">
-          <div class="statusIcon">✕</div>
-          <div class="statusText">Payment Declined</div>
-
-          <div class="card wide">
-            <div class="row between"><div class="bold">Guest</div><div id="declGuest">Full Name</div></div>
-            <div class="row between"><div class="bold">Room Number</div><div id="declRoom">000</div></div>
-            <div class="divider"></div>
-            <div class="row between"><div class="bold">Booking ID</div><div id="declBooking">0000000000</div></div>
-            <div class="row between"><div class="bold">Transaction Type</div><div id="declType">Debit/Credit/NFC</div></div>
-            <div class="row between"><div class="bold">Transaction ID</div><div id="declTxn">00000000000000</div></div>
-          </div>
-
-          <div class="card wide">
-            <div class="row between"><div class="bold">Total Amount</div><div id="declTotal" class="bold">$0.00</div></div>
-          </div>
-        </div>
-
-        <div class="footer split">
-          <button class="btn secondary" data-action="changeMethod">Change Method</button>
-          <button class="btn primary" data-action="retryPay">Retry</button>
-        </div>
-      </section>
-
-      <section class="view" data-route="paymentSuccess">
-        <header class="topbar">
-          <button class="iconbtn" data-action="back" aria-label="Back">←</button>
-          <div class="topbar__title"></div>
-          <button class="iconbtn" data-action="go" data-to="dashboard" aria-label="Close">✕</button>
-        </header>
-
-        <div class="statusFull success">
-          <div class="statusIcon">✓</div>
-          <div class="statusText">Payment Successful</div>
-
-          <div class="card wide">
-            <div class="row between"><div class="bold">Guest</div><div id="succGuest">Full Name</div></div>
-            <div class="row between"><div class="bold">Room Number</div><div id="succRoom">000</div></div>
-            <div class="divider"></div>
-            <div class="row between"><div class="bold">Booking ID</div><div id="succBooking">0000000000</div></div>
-            <div class="row between"><div class="bold">Transaction Type</div><div id="succType">Cash</div></div>
-            <div class="row between"><div class="bold">Transaction ID</div><div id="succTxn">00000000000000</div></div>
-          </div>
-
-          <div class="card wide">
-            <div class="row between"><div class="bold">Total Amount</div><div id="succTotal" class="bold">$0.00</div></div>
-          </div>
-        </div>
-
-        <div class="footer">
-          <button class="btn primary" data-action="printReceipt">Print Receipt</button>
-        </div>
-      </section>
-
-      <section class="view" data-route="receipt">
-        <header class="topbar">
-          <button class="iconbtn" data-action="back" aria-label="Back">←</button>
-          <div class="topbar__title">Receipt</div>
-          <button class="iconbtn" data-action="go" data-to="dashboard" aria-label="Close">✕</button>
-        </header>
-
-        <div class="content">
-          <div class="card">
-            <div class="bold">Example XYZ Hotels</div>
-            <div class="muted small">Receipt (Prototype)</div>
-            <div class="divider"></div>
-            <div class="row between"><div>Guest</div><div id="rGuest"></div></div>
-            <div class="row between"><div>Room</div><div id="rRoom"></div></div>
-            <div class="row between"><div>Booking ID</div><div id="rBooking"></div></div>
-            <div class="row between"><div>Payment</div><div id="rPay"></div></div>
-            <div class="divider"></div>
-            <div class="row between bold"><div>Total</div><div id="rTotal"></div></div>
-          </div>
-
-          <div class="footer">
-            <button class="btn primary" data-action="receiptPrinted">Mark Printed</button>
-          </div>
-        </div>
-      </section>
+      <div class="grid-2">
+        <button class="tile tile-muted" type="button" data-action="other">Reports</button>
+        <button class="tile tile-muted" type="button" data-action="other">Payments</button>
+      </div>
     </main>
+
+    <footer class="footer">Version 1.0</footer>
+  </section>
+
+
+  <!-- =============== 1) GUEST REGISTRATION =============== -->
+  <section id="guestRegistration" class="screen" aria-label="Guest Registration">
+    <header class="topbar">
+      <button class="icon-btn" type="button" aria-label="Back" data-nav="dashboard">←</button>
+      <h1 class="title center">Guest Registration</h1>
+      <button class="icon-btn" type="button" aria-label="Scan ID" data-nav="scanner">📷</button>
+    </header>
+
+    <div class="progress" aria-hidden="true">
+      <div class="step active"></div>
+      <div class="step"></div>
+      <div class="step"></div>
+      <div class="step"></div>
+    </div>
+
+    <main class="content">
+      <form id="registrationForm" novalidate>
+        <div class="form-group">
+          <label for="fullName">Full Name <span class="req">*</span></label>
+          <input id="fullName" name="fullName" type="text" placeholder="Enter Full Name" autocomplete="name" />
+          <p class="field-error" data-error-for="fullName"></p>
+        </div>
+
+        <div class="form-group">
+          <label for="street">Street Address <span class="req">*</span></label>
+          <input id="street" name="street" type="text" placeholder="Enter Street Address" autocomplete="street-address" />
+          <p class="field-error" data-error-for="street"></p>
+        </div>
+
+        <div class="form-group">
+          <label for="city">City <span class="req">*</span></label>
+          <input id="city" name="city" type="text" placeholder="Enter City" autocomplete="address-level2" />
+          <p class="field-error" data-error-for="city"></p>
+        </div>
+
+        <div class="row">
+          <div class="form-group">
+            <label for="state">State <span class="req">*</span></label>
+            <select id="state" name="state">
+              <option value="">Select</option>
+            </select>
+            <p class="field-error" data-error-for="state"></p>
+          </div>
+
+          <div class="form-group">
+            <label for="zip">Zip Code <span class="req">*</span></label>
+            <input id="zip" name="zip" type="text" inputmode="numeric" placeholder="5-digit ZIP code" />
+            <p class="field-error" data-error-for="zip"></p>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="form-group">
+            <label for="gender">Gender <span class="req">*</span></label>
+            <select id="gender" name="gender">
+              <option value="">Select</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+            <p class="field-error" data-error-for="gender"></p>
+          </div>
+
+          <div class="form-group">
+            <label for="age">Age <span class="req">*</span></label>
+            <input id="age" name="age" type="number" min="0" placeholder="00" />
+            <p class="hint">Derived from DOB (DBB) when scanning.</p>
+            <p class="field-error" data-error-for="age"></p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="idType">Type of Identification</label>
+          <select id="idType" name="idType">
+            <option value="">Select</option>
+            <option value="DL">DL</option>
+            <option value="ID">ID</option>
+          </select>
+          <p class="field-error" data-error-for="idType"></p>
+        </div>
+
+        <div class="form-group">
+          <label for="idNumber">Identification Number <span class="req">*</span></label>
+          <input id="idNumber" name="idNumber" type="text" placeholder="0000000000" />
+          <p class="field-error" data-error-for="idNumber"></p>
+        </div>
+
+        <!-- Stored even if UI shows only Age -->
+        <input id="dob" name="dob" type="hidden" />
+        <input id="rawScan" name="rawScan" type="hidden" />
+      </form>
+    </main>
+
+    <footer class="bottom-bar">
+      <button class="primary-btn" type="button" id="registrationNextBtn">Next</button>
+    </footer>
+  </section>
+
+
+<!-- =============== 2) SCANNER =============== -->
+<section id="scanner" class="screen" aria-label="Scanner">
+  <header class="topbar">
+    <button class="icon-btn" type="button" aria-label="Close Scanner" data-nav="guestRegistration" id="scannerCloseBtn">✕</button>
+    <h1 class="title center">Scanner</h1>
+    <button class="icon-btn" type="button" aria-label="Flash Toggle" id="flashToggleBtn">⚡</button>
+  </header>
+
+  <main class="scanner-body">
+    <div class="camera-preview">
+      <!-- Live camera -->
+      <video id="scannerVideo" autoplay playsinline muted></video>
+
+      <!-- Overlay + alignment guide -->
+      <div class="scan-overlay" aria-hidden="true">
+        <div class="scan-guide">
+          <div class="scan-guide-inner"></div>
+        </div>
+      </div>
+
+      <!-- Canvas for frame capture (hidden) -->
+      <canvas id="scannerCanvas" class="hidden"></canvas>
+
+      <!-- Status -->
+      <div class="scanner-status" id="scannerStatus">Initializing camera…</div>
+    </div>
+
+    <div class="scanner-panel">
+      <div class="scanner-actions">
+        <button class="secondary-btn" type="button" id="switchCameraBtn">Switch Camera</button>
+        <button class="secondary-btn" type="button" id="pauseResumeBtn">Pause</button>
+      </div>
+
+      <p class="muted scanner-note">
+        Tip: Move the PDF417 barcode fully inside the guide box.
+      </p>
+
+      <details class="muted">
+        <summary>Troubleshooting</summary>
+        <ul class="muted">
+          <li>If PDF417 isn’t detected on this device/browser, use a decoder library fallback (ZXing/Dynamsoft).</li>
+          <li>On iOS Safari, PDF417 support is limited without a library/native wrapper.</li>
+        </ul>
+      </details>
+    </div>
+  </main>
+</section>
+
+
+  <!-- =============== 3A) RETURNING GUEST =============== -->
+  <section id="returningGuest" class="screen" aria-label="Returning Guest">
+    <header class="topbar">
+      <h1 class="title">Returning Guest</h1>
+      <div></div>
+    </header>
+
+    <main class="content">
+      <div class="card">
+        <h2 class="card-title" id="returningName">John Q Doe</h2>
+        <p class="muted" id="returningMeta">DL • D12345678</p>
+
+        <div class="card-grid">
+          <div class="info">
+            <div class="info-label">Rating</div>
+            <div class="info-value" id="returningRating">4.6</div>
+          </div>
+          <div class="info">
+            <div class="info-label">Active since</div>
+            <div class="info-value" id="returningSince">2022</div>
+          </div>
+          <div class="info">
+            <div class="info-label">Latest activity</div>
+            <div class="info-value" id="returningActivity">Stay-over • Jan 2026</div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="bottom-bar two">
+      <button class="secondary-btn" type="button" data-nav="guestRegistration">Cancel</button>
+      <button class="primary-btn" type="button" id="returningProceedBtn">Proceed</button>
+    </footer>
+  </section>
+
+
+  <!-- =============== 3B) NEW GUEST =============== -->
+  <section id="newGuest" class="screen" aria-label="New Guest">
+    <header class="topbar">
+      <h1 class="title">New User</h1>
+      <div></div>
+    </header>
+
+    <main class="content">
+      <div class="hero">
+        <div class="hero-title">New User</div>
+        <div class="hero-sub" id="newGuestSummary">John Q Doe • DL • D12345678</div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Guest Summary</h2>
+        <p class="muted" id="newGuestDetails">No matching record found.</p>
+      </div>
+    </main>
+
+    <footer class="bottom-bar two">
+      <button class="secondary-btn" type="button" id="newGuestSkipBtn">Skip</button>
+      <button class="primary-btn" type="button" id="newGuestSaveBtn">Save</button>
+    </footer>
+  </section>
+
+
+  <!-- =============== 4) STAY DETAILS =============== -->
+  <section id="stayDetails" class="screen" aria-label="Stay Details">
+    <header class="topbar">
+      <button class="icon-btn" type="button" aria-label="Close" id="stayCloseBtn">✕</button>
+      <h1 class="title center">Stay Details</h1>
+      <div></div>
+    </header>
+
+    <main class="content">
+      <form id="stayForm" novalidate>
+        <div class="row">
+          <div class="form-group">
+            <label for="checkIn">Check-in date <span class="req">*</span></label>
+            <input id="checkIn" type="date" />
+            <p class="field-error" data-error-for="checkIn"></p>
+          </div>
+
+          <div class="form-group">
+            <label for="checkOut">Check-out date <span class="req">*</span></label>
+            <input id="checkOut" type="date" />
+            <p class="field-error" data-error-for="checkOut"></p>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="form-group">
+            <label for="adults">Adults <span class="req">*</span></label>
+            <select id="adults">
+              <option value="">Select</option>
+              <option>1</option><option>2</option><option>3</option><option>4</option>
+            </select>
+            <p class="field-error" data-error-for="adults"></p>
+          </div>
+
+          <div class="form-group">
+            <label for="children">Children</label>
+            <select id="children">
+              <option value="0">0</option>
+              <option>1</option><option>2</option><option>3</option>
+            </select>
+            <p class="field-error" data-error-for="children"></p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="room">Select Room <span class="req">*</span></label>
+          <select id="room">
+            <option value="">Select</option>
+            <option value="STD-101">Standard • 101</option>
+            <option value="DLX-204">Deluxe • 204</option>
+            <option value="STE-310">Suite • 310</option>
+          </select>
+          <p class="hint">In production: filter by availability + occupancy rules.</p>
+          <p class="field-error" data-error-for="room"></p>
+        </div>
+
+        <div class="form-group">
+          <label for="dailyRate">Daily Rate <span class="req">*</span></label>
+          <select id="dailyRate">
+            <option value="">Select</option>
+            <option value="120">Standard Rate • $120</option>
+            <option value="150">Flex Rate • $150</option>
+            <option value="99">Promo Rate • $99</option>
+          </select>
+          <p class="field-error" data-error-for="dailyRate"></p>
+        </div>
+
+        <div class="row">
+          <div class="form-group">
+            <label for="deposit">Deposit</label>
+            <input id="deposit" type="number" min="0" step="0.01" placeholder="0.00" />
+            <p class="field-error" data-error-for="deposit"></p>
+          </div>
+
+          <div class="form-group">
+            <label for="discount">Discount</label>
+            <input id="discount" type="number" min="0" step="0.01" placeholder="0.00" />
+            <p class="field-error" data-error-for="discount"></p>
+          </div>
+        </div>
+
+        <div class="inline-metric">
+          <div class="metric-label">Nights</div>
+          <div class="metric-value" id="nightsValue">—</div>
+        </div>
+      </form>
+    </main>
+
+    <footer class="bottom-bar">
+      <button class="primary-btn" type="button" id="stayNextBtn">Next</button>
+    </footer>
+  </section>
+
+
+  <!-- =============== 5) BOOKING SUMMARY =============== -->
+  <section id="bookingSummary" class="screen" aria-label="Booking Summary">
+    <header class="topbar">
+      <button class="icon-btn" type="button" aria-label="Back" data-nav="stayDetails">←</button>
+      <h1 class="title center">Booking Summary</h1>
+      <button class="icon-btn" type="button" aria-label="Close" id="summaryCloseBtn">✕</button>
+    </header>
+
+    <main class="content">
+      <div class="card" id="summaryCard">
+        <h2 class="card-title">Booking Summary</h2>
+        <div class="summary-lines" id="summaryLines"></div>
+      </div>
+
+      <div class="card total-card">
+        <div class="total-row">
+          <div>
+            <div class="muted">Total Amount</div>
+            <div class="total-amount" id="totalAmount">$0.00</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Payment Method</h2>
+        <div class="grid-2">
+          <button class="secondary-btn" type="button" id="payCashBtn">Cash</button>
+          <button class="primary-btn" type="button" id="payCardBtn">Card</button>
+        </div>
+      </div>
+    </main>
+  </section>
+
+
+  <!-- =============== 6A) CARD PAYMENT DETAILS =============== -->
+  <section id="cardPayment" class="screen" aria-label="Card Payment Details">
+    <header class="topbar">
+      <button class="icon-btn" type="button" aria-label="Back" data-nav="bookingSummary">←</button>
+      <h1 class="title center">Card Payment</h1>
+      <button class="icon-btn" type="button" aria-label="Close" id="cardCloseBtn">✕</button>
+    </header>
+
+    <main class="content">
+      <div class="card total-card">
+        <div class="muted">Total Amount</div>
+        <div class="total-amount" id="cardTotalAmount">$0.00</div>
+      </div>
+
+      <div class="card">
+        <button class="primary-btn" type="button" id="tapToPayBtn">Tap to Pay</button>
+      </div>
+
+      <div class="divider"><span>or</span></div>
+
+      <div class="card">
+        <h2 class="card-title">Manual Card Entry</h2>
+
+        <form id="cardForm" novalidate>
+          <div class="form-group">
+            <label for="cardNumber">Card Number <span class="req">*</span></label>
+            <input id="cardNumber" inputmode="numeric" placeholder="1234 5678 9012 3456" />
+            <p class="field-error" data-error-for="cardNumber"></p>
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label for="expiry">Expiry <span class="req">*</span></label>
+              <input id="expiry" placeholder="MM/YY" />
+              <p class="field-error" data-error-for="expiry"></p>
+            </div>
+
+            <div class="form-group">
+              <label for="cvv">CVV <span class="req">*</span></label>
+              <input id="cvv" inputmode="numeric" placeholder="123" />
+              <p class="field-error" data-error-for="cvv"></p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="cardName">Name on Card <span class="req">*</span></label>
+            <input id="cardName" placeholder="John Doe" />
+            <p class="field-error" data-error-for="cardName"></p>
+          </div>
+
+          <div class="form-group">
+            <label for="cardZip">ZIP <span class="req">*</span></label>
+            <input id="cardZip" inputmode="numeric" placeholder="90210" />
+            <p class="field-error" data-error-for="cardZip"></p>
+          </div>
+        </form>
+
+        <button class="primary-btn" type="button" id="cardProceedBtn">Proceed to Pay</button>
+      </div>
+    </main>
+  </section>
+
+
+  <!-- =============== 6B) CASH PAYMENT CONFIRM =============== -->
+  <section id="cashConfirm" class="screen" aria-label="Cash Payment Confirm">
+    <header class="topbar">
+      <button class="icon-btn" type="button" aria-label="Back" data-nav="bookingSummary">←</button>
+      <h1 class="title center">Cash Payment</h1>
+      <button class="icon-btn" type="button" aria-label="Close" id="cashCloseBtn">✕</button>
+    </header>
+
+    <main class="content">
+      <div class="hero">
+        <div class="hero-title">Record Cash Payment</div>
+        <div class="hero-sub">Confirm cash received.</div>
+      </div>
+
+      <div class="card total-card">
+        <div class="muted">Total Amount</div>
+        <div class="total-amount" id="cashTotalAmount">$0.00</div>
+      </div>
+    </main>
+
+    <footer class="bottom-bar">
+      <button class="primary-btn" type="button" id="cashYesBtn">Yes</button>
+    </footer>
+  </section>
+
+
+  <!-- =============== 7) TAP TO PAY =============== -->
+  <section id="tapToPay" class="screen" aria-label="Tap to Pay">
+    <header class="topbar">
+      <button class="icon-btn" type="button" aria-label="Close" data-nav="cardPayment">✕</button>
+      <h1 class="title center">Tap to Pay</h1>
+      <div></div>
+    </header>
+
+    <main class="content">
+      <div class="nfc-indicator">
+        <div class="nfc-dot" aria-hidden="true"></div>
+        <div>
+          <div class="nfc-title">NFC Ready</div>
+          <div class="muted">Ask guest to tap card/phone.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Summary</h2>
+        <div class="summary-lines" id="nfcSummaryLines"></div>
+      </div>
+
+      <div class="card total-card">
+        <div class="muted">Total Amount</div>
+        <div class="total-amount" id="nfcTotalAmount">$0.00</div>
+      </div>
+
+      <button class="primary-btn" type="button" id="simulateNfcTapBtn">Simulate Tap</button>
+    </main>
+  </section>
+
+
+  <!-- =============== 8) PAYMENT PROCESSING =============== -->
+  <section id="paymentProcessing" class="screen" aria-label="Payment Processing">
+    <header class="topbar">
+      <h1 class="title">Payment Processing…</h1>
+      <div></div>
+    </header>
+
+    <main class="content center-stack">
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="muted">Do not close this screen.</p>
+    </main>
+  </section>
+
+
+  <!-- =============== 9A) CARD SUCCESS =============== -->
+  <section id="cardSuccess" class="screen" aria-label="Card Payment Successful">
+    <header class="topbar">
+      <h1 class="title">Payment Successful</h1>
+      <div></div>
+    </header>
+
+    <main class="content">
+      <div class="status status-success">
+        <div class="status-title">Success</div>
+        <div class="status-sub">Card payment completed.</div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Transaction Details</h2>
+        <div class="summary-lines" id="cardSuccessDetails"></div>
+      </div>
+
+      <button class="primary-btn" type="button" id="printReceiptFromCardBtn">Print Receipt</button>
+    </main>
+  </section>
+
+
+  <!-- =============== 9B) CASH SUCCESS =============== -->
+  <section id="cashSuccess" class="screen" aria-label="Cash Payment Successful">
+    <header class="topbar">
+      <h1 class="title">Payment Successful</h1>
+      <div></div>
+    </header>
+
+    <main class="content">
+      <div class="status status-success">
+        <div class="status-title">Success</div>
+        <div class="status-sub">Cash payment recorded.</div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Transaction Details</h2>
+        <div class="summary-lines" id="cashSuccessDetails"></div>
+      </div>
+
+      <button class="primary-btn" type="button" id="printReceiptFromCashBtn">Print Receipt</button>
+    </main>
+  </section>
+
+
+  <!-- =============== 9C) CARD DECLINED =============== -->
+  <section id="cardDeclined" class="screen" aria-label="Card Payment Declined">
+    <header class="topbar">
+      <h1 class="title">Payment Declined</h1>
+      <div></div>
+    </header>
+
+    <main class="content">
+      <div class="status status-declined">
+        <div class="status-title">Declined</div>
+        <div class="status-sub">Card was declined. Choose another method.</div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Details</h2>
+        <div class="summary-lines" id="declinedDetails"></div>
+      </div>
+
+      <div class="grid-2">
+        <button class="secondary-btn" type="button" disabled aria-disabled="true">Retry (disabled)</button>
+        <button class="primary-btn" type="button" data-nav="bookingSummary">Change Method</button>
+      </div>
+    </main>
+  </section>
+
+
+  <!-- =============== 10) RECEIPT PRINTED =============== -->
+  <section id="receiptPrinted" class="screen" aria-label="Receipt Printed">
+    <header class="topbar">
+      <h1 class="title">Receipt Printed</h1>
+      <div></div>
+    </header>
+
+    <main class="content center-stack">
+      <div class="big-check" aria-hidden="true">✓</div>
+      <p class="muted">Receipt has been printed successfully.</p>
+
+      <div class="grid-2">
+        <button class="secondary-btn" type="button" id="shareBtn">Share</button>
+        <button class="primary-btn" type="button" id="doneBtn">Done</button>
+      </div>
+    </main>
+  </section>
+
+
+  <!-- =============== SNACKBAR (11/12/13) =============== -->
+  <div id="snackbar" class="snackbar" role="status" aria-live="polite" aria-atomic="true">
+    <span id="snackbarMsg"></span>
+    <button class="snackbar-close" type="button" aria-label="Dismiss" id="snackbarCloseBtn">✕</button>
   </div>
 
-  <!-- ZXing for PDF417 scan (camera). If you don't want external CDN, remove and use "Use Sample ID". -->
-  <script src="https://unpkg.com/@zxing/library@latest"></script>
-  <script type="module" src="./app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
