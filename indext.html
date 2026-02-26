@@ -2,517 +2,574 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Guest Registration</title>
-
-  <!-- ZXing (PDF417) -->
-  <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
-
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>PDF417 Scanner (Vanilla JS)</title>
   <style>
-    :root{
-      --bg:#f3f3f3;
-      --card:#ffffff;
-      --text:#1a1a1a;
-      --muted:#6b6b6b;
-      --border:#dcdcdc;
-      --shadow: 0 1px 0 rgba(0,0,0,0.06);
-      --radius: 10px;
-      --pad: 16px;
+    :root {
+      --bg: #0b0c10;
+      --card: #12141b;
+      --text: #e9ecf1;
+      --muted: #a8b0bd;
+      --accent: #4da3ff;
+      --danger: #ff5d5d;
+      --ok: #4dff88;
+      --border: rgba(255,255,255,.12);
+      --shadow: 0 8px 30px rgba(0,0,0,.35);
+      --radius: 16px;
     }
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg);
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background: radial-gradient(1200px 900px at 50% -10%, rgba(77,163,255,.18), transparent 60%),
+                  radial-gradient(1200px 900px at 90% 10%, rgba(77,255,136,.12), transparent 55%),
+                  var(--bg);
       color: var(--text);
     }
 
-    /* Top app bar */
-    .appbar{
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      height: 64px;
-      background: #fff;
-      display:flex;
-      align-items:center;
-      gap: 12px;
-      padding: 0 14px;
-      border-bottom: 1px solid #e6e6e6;
+    header {
+      padding: 18px 16px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
-    .icon-btn{
-      border:0;
-      background:transparent;
-      padding:10px;
-      border-radius:12px;
-      cursor:pointer;
+    h1 {
+      font-size: 18px;
+      margin: 0;
+      letter-spacing: .2px;
     }
-    .icon-btn:active{background:#f0f0f0}
-    .title{
-      flex:1;
-      text-align:center;
-      font-weight: 800;
-      font-size: 32px;
-      letter-spacing: -0.5px;
-      margin-right: 44px; /* balances right icon */
-    }
-    .bar{
-      height: 6px;
-      background: #111;
-      width: 120px;
-      margin-top: -1px;
-    }
-
-    /* Page container */
-    .page{
-      max-width: 520px;
-      margin: 0 auto;
-      padding-bottom: 96px; /* space for bottom button */
-    }
-
-    .section{
-      padding: 18px 18px 0;
-    }
-
-    label{
-      display:block;
-      font-size: 28px;
-      font-weight: 800;
-      margin: 18px 0 10px;
-    }
-    .req::after{content:"*"; margin-left:2px;}
-    .field{
-      background: var(--card);
-      border: 2px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px 14px;
-      font-size: 26px;
-      width: 100%;
-      outline: none;
-      box-shadow: var(--shadow);
-    }
-    .field::placeholder{color:#8b8b8b}
-    .field:focus{
-      border-color:#bdbdbd;
-    }
-
-    .row{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      align-items:end;
-    }
-
-    .select-wrap{
-      position: relative;
-    }
-    select.field{
-      appearance:none;
-      padding-right: 48px;
-      background: #fff;
-    }
-    .chev{
-      position:absolute;
-      right: 14px;
-      bottom: 16px;
-      width: 18px;
-      height: 18px;
-      pointer-events:none;
-      border-right: 3px solid #333;
-      border-bottom: 3px solid #333;
-      transform: rotate(45deg);
-      opacity: .85;
-    }
-
-    .hint{
-      font-size: 14px;
+    .sub {
+      font-size: 13px;
       color: var(--muted);
-      margin-top: 8px;
       line-height: 1.35;
     }
 
-    /* Bottom fixed button */
-    .bottom{
-      position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      padding: 14px;
-      background: linear-gradient(to top, rgba(243,243,243,1), rgba(243,243,243,0));
-    }
-    .next{
-      max-width: 520px;
+    .wrap {
+      padding: 12px 16px 22px;
+      display: grid;
+      gap: 12px;
+      max-width: 860px;
       margin: 0 auto;
-      display:block;
-      width: calc(100% - 28px);
-      height: 72px;
-      border-radius: 8px;
-      background: #000;
-      color:#fff;
-      font-size: 26px;
-      font-weight: 700;
-      border: none;
-      cursor:pointer;
-    }
-    .toast{
-      max-width: 520px;
-      margin: 10px auto 0;
-      padding: 12px 14px;
-      border-radius: 10px;
-      background: #fff;
-      border: 1px solid #e1e1e1;
-      color: #333;
-      font-size: 14px;
-      display:none;
     }
 
-    /* Hidden helpers */
-    #barcodeFile{display:none;}
-    canvas{display:none;}
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .viewer {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      background: #000;
+    }
+
+    video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .hud {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: grid;
+      place-items: center;
+    }
+    .frame {
+      width: min(78%, 420px);
+      aspect-ratio: 4 / 2.5;
+      border-radius: 12px;
+      border: 2px solid rgba(255,255,255,.65);
+      box-shadow: 0 0 0 9999px rgba(0,0,0,.25);
+      position: relative;
+    }
+    .frame::after {
+      content: "Align PDF417 inside the frame";
+      position: absolute;
+      left: 50%;
+      top: calc(100% + 10px);
+      transform: translateX(-50%);
+      font-size: 12px;
+      color: rgba(255,255,255,.85);
+      background: rgba(0,0,0,.35);
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.18);
+      white-space: nowrap;
+    }
+
+    .controls {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    button, .file {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      padding: 12px 12px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: .2px;
+      cursor: pointer;
+      transition: transform .04s ease, background .15s ease, border-color .15s ease;
+      user-select: none;
+    }
+    button:active { transform: scale(.99); }
+    button.primary {
+      background: rgba(77,163,255,.18);
+      border-color: rgba(77,163,255,.4);
+    }
+    button.danger {
+      background: rgba(255,93,93,.15);
+      border-color: rgba(255,93,93,.35);
+    }
+
+    .meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .pill {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,.22);
+    }
+    .pill.ok { color: #c9ffe0; border-color: rgba(77,255,136,.35); }
+    .pill.warn { color: #ffe1c9; border-color: rgba(255,184,77,.35); }
+
+    .out {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 140px;
+      resize: vertical;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,.35);
+      color: var(--text);
+      padding: 12px;
+      font-size: 13px;
+      line-height: 1.35;
+      outline: none;
+    }
+
+    .status {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    .status strong { color: var(--text); }
+
+    .small {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .hidden { display: none !important; }
+
+    @media (min-width: 720px) {
+      .wrap { grid-template-columns: 1.2fr .8fr; align-items: start; }
+      .viewer { aspect-ratio: 16 / 11; }
+      .row { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
-
 <body>
-  <header class="appbar">
-    <button class="icon-btn" aria-label="Back" title="Back" onclick="history.back()">
-      <!-- back arrow -->
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M15 18l-6-6 6-6" stroke="#111" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </button>
-
-    <div class="title">Guest Registration</div>
-
-    <button class="icon-btn" id="scanBtn" aria-label="Upload barcode image" title="Upload barcode image">
-      <!-- barcode icon -->
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M4 7v10M7 7v10M10 7v10M14 7v10M17 7v10M20 7v10" stroke="#111" stroke-width="1.9" stroke-linecap="round"/>
-        <path d="M3 6h3M3 18h3M18 6h3M18 18h3" stroke="#111" stroke-width="1.9" stroke-linecap="round"/>
-      </svg>
-    </button>
+  <header>
+    <h1>PDF417 Barcode Scanner (Mobile Web)</h1>
+    <div class="sub">Works in mobile browsers. Uses <strong>BarcodeDetector</strong> when supported, otherwise falls back to <strong>ZXing</strong> in pure JS.</div>
   </header>
-  <div class="bar"></div>
 
-  <main class="page">
-    <div class="section">
-      <label class="req" for="fullName">Full Name</label>
-      <input class="field" id="fullName" placeholder="Enter Full Name" autocomplete="name" />
+  <main class="wrap">
+    <section class="card">
+      <div class="viewer">
+        <video id="video" playsinline muted></video>
+        <div class="hud">
+          <div class="frame"></div>
+        </div>
+      </div>
 
-      <label class="req" for="street">Street Address</label>
-      <input class="field" id="street" placeholder="Enter Street Address" autocomplete="street-address" />
+      <div class="controls">
+        <div class="meta">
+          <span id="enginePill" class="pill">Engine: …</span>
+          <span id="cameraPill" class="pill">Camera: idle</span>
+        </div>
 
-      <label class="req" for="city">City</label>
-      <input class="field" id="city" placeholder="Enter City" autocomplete="address-level2" />
+        <div class="row">
+          <button id="startBtn" class="primary">Start Camera</button>
+          <button id="stopBtn" class="danger" disabled>Stop</button>
+        </div>
 
+        <div class="row">
+          <button id="torchBtn" disabled>Toggle Torch</button>
+          <label class="file" style="display:flex;align-items:center;justify-content:center;gap:8px;">
+            Scan from Photo
+            <input id="fileInput" type="file" accept="image/*" class="hidden" />
+          </label>
+        </div>
+
+        <div class="small">
+          Tip: PDF417 needs sharp focus + higher resolution. Try steady hands and bright light.
+        </div>
+      </div>
+    </section>
+
+    <section class="card out">
+      <div class="status" id="status">
+        Status: <strong>Ready</strong>. Tap <strong>Start Camera</strong> and point at a PDF417 barcode.
+      </div>
+      <textarea id="result" placeholder="Decoded text will appear here…"></textarea>
       <div class="row">
-        <div>
-          <label class="req" for="state">State</label>
-          <div class="select-wrap">
-            <select class="field" id="state" autocomplete="address-level1">
-              <option value="" selected>Select</option>
-              <!-- common list; extend as needed -->
-              <option>AL</option><option>AK</option><option>AZ</option><option>AR</option><option>CA</option>
-              <option>CO</option><option>CT</option><option>DE</option><option>FL</option><option>GA</option>
-              <option>HI</option><option>ID</option><option>IL</option><option>IN</option><option>IA</option>
-              <option>KS</option><option>KY</option><option>LA</option><option>ME</option><option>MD</option>
-              <option>MA</option><option>MI</option><option>MN</option><option>MS</option><option>MO</option>
-              <option>MT</option><option>NE</option><option>NV</option><option>NH</option><option>NJ</option>
-              <option>NM</option><option>NY</option><option>NC</option><option>ND</option><option>OH</option>
-              <option>OK</option><option>OR</option><option>PA</option><option>RI</option><option>SC</option>
-              <option>SD</option><option>TN</option><option>TX</option><option>UT</option><option>VT</option>
-              <option>VA</option><option>WA</option><option>WV</option><option>WI</option><option>WY</option>
-            </select>
-            <span class="chev"></span>
-          </div>
-        </div>
-
-        <div>
-          <label class="req" for="zip">Zip Code</label>
-          <input class="field" id="zip" placeholder="5-digit ZIP code" inputmode="numeric" autocomplete="postal-code" />
-        </div>
+        <button id="copyBtn">Copy Result</button>
+        <button id="clearBtn">Clear</button>
       </div>
-
-      <div class="row">
-        <div>
-          <label class="req" for="gender">Gender</label>
-          <div class="select-wrap">
-            <select class="field" id="gender">
-              <option value="" selected>Select</option>
-              <option value="M">Male</option>
-              <option value="F">Female</option>
-              <option value="X">X</option>
-            </select>
-            <span class="chev"></span>
-          </div>
-        </div>
-
-        <div>
-          <label class="req" for="age">Age</label>
-          <input class="field" id="age" placeholder="00" inputmode="numeric" />
-        </div>
-      </div>
-
-      <label for="idType">Type of Identification</label>
-      <div class="select-wrap">
-        <select class="field" id="idType">
-          <option value="" selected>Select</option>
-          <option value="DL">Driver License</option>
-          <option value="STATE_ID">State ID</option>
-          <option value="PASSPORT">Passport</option>
-          <option value="OTHER">Other</option>
-        </select>
-        <span class="chev"></span>
-      </div>
-
-      <label class="req" for="idNumber">Identification Number</label>
-      <input class="field" id="idNumber" placeholder="0000000000" />
-
-      <p class="hint">
-        Tip: Use the barcode button (top-right) to upload a clear photo of the PDF417 barcode on the back of a US ID.
-        The form will auto-fill if the barcode decodes successfully.
-      </p>
-
-      <div class="toast" id="toast"></div>
-
-      <input id="barcodeFile" type="file" accept="image/*" />
-      <canvas id="canvas"></canvas>
-    </div>
+    </section>
   </main>
 
-  <footer class="bottom">
-    <button class="next" type="button" onclick="alert('Next clicked')">Next</button>
-  </footer>
+  <canvas id="canvas" class="hidden"></canvas>
 
-  <script>
+  <script type="module">
+    // --- UI helpers ---
     const $ = (id) => document.getElementById(id);
+    const video = $("video");
+    const canvas = $("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
-    const toastEl = $("toast");
-    function toast(msg) {
-      toastEl.textContent = msg;
-      toastEl.style.display = "block";
-      clearTimeout(toastEl._t);
-      toastEl._t = setTimeout(() => (toastEl.style.display = "none"), 5000);
+    const startBtn = $("startBtn");
+    const stopBtn = $("stopBtn");
+    const torchBtn = $("torchBtn");
+    const fileInput = $("fileInput");
+    const enginePill = $("enginePill");
+    const cameraPill = $("cameraPill");
+    const statusEl = $("status");
+    const resultEl = $("result");
+    const copyBtn = $("copyBtn");
+    const clearBtn = $("clearBtn");
+
+    function setStatus(msg) {
+      statusEl.innerHTML = `Status: <strong>${msg}</strong>`;
+    }
+    function setEngine(name, kind = "pill") {
+      enginePill.textContent = `Engine: ${name}`;
+      enginePill.className = `pill ${kind}`;
+    }
+    function setCameraState(msg, kind = "") {
+      cameraPill.textContent = `Camera: ${msg}`;
+      cameraPill.className = `pill ${kind}`.trim();
     }
 
-    // --- Barcode upload button ---
-    $("scanBtn").addEventListener("click", () => $("barcodeFile").click());
+    // --- State ---
+    let stream = null;
+    let stopLoop = false;
+    let detector = null;
+    let zxing = null;
+    let zxingReader = null;
 
-    $("barcodeFile").addEventListener("change", async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+    let lastText = "";
+    let lastAt = 0;
+
+    // Throttle duplicates
+    function publish(text) {
+      const now = Date.now();
+      if (!text) return;
+      if (text === lastText && (now - lastAt) < 1500) return;
+
+      lastText = text;
+      lastAt = now;
+
+      resultEl.value = text;
+      setStatus("✅ Decoded PDF417 (or another supported format).");
+      navigator.vibrate?.(30);
+    }
+
+    // --- Choose engine: BarcodeDetector if it supports pdf417, else ZXing fallback ---
+    async function initEngine() {
+      // BarcodeDetector path
+      if ("BarcodeDetector" in window) {
+        try {
+          const formats = await window.BarcodeDetector.getSupportedFormats?.();
+          const supportsPdf417 = Array.isArray(formats) && formats.includes("pdf417");
+
+          if (supportsPdf417) {
+            detector = new BarcodeDetector({ formats: ["pdf417"] });
+            setEngine("BarcodeDetector (native)", "ok");
+            return;
+          }
+
+          // Even if BarcodeDetector exists, if pdf417 isn’t supported, use ZXing.
+          setEngine("BarcodeDetector (no pdf417) → ZXing fallback", "warn");
+        } catch {
+          setEngine("BarcodeDetector error → ZXing fallback", "warn");
+        }
+      } else {
+        setEngine("ZXing (fallback)", "warn");
+      }
+
+      // ZXing fallback (pure JS via ESM CDN)
+      // Uses @zxing/library which supports PDF417 (requires BigInt; modern iOS supports it).
+      if (!zxing) {
+        zxing = await import("https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/+esm");
+        zxingReader = new zxing.BrowserMultiFormatReader();
+
+        // Hint: prioritize PDF417
+        // (ZXing still auto-detects; restricting formats helps performance.)
+        const hints = new Map();
+        hints.set(zxing.DecodeHintType.POSSIBLE_FORMATS, [zxing.BarcodeFormat.PDF_417]);
+        zxingReader.hints = hints;
+
+        setEngine("ZXing (@zxing/library)", "ok");
+      }
+    }
+
+    // --- Camera control ---
+    async function startCamera() {
+      stopLoop = false;
+      resultEl.placeholder = "Decoding… hold steady on the PDF417 barcode.";
+
+      // Rear camera, try to request higher resolution (helps PDF417)
+      const constraints = {
+        audio: false,
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      };
+
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      video.srcObject = stream;
+      await video.play();
+
+      setCameraState("running", "ok");
+      stopBtn.disabled = false;
+      startBtn.disabled = true;
+
+      // Torch availability (iOS support varies by device)
+      updateTorchAvailability();
+      scanLoop();
+    }
+
+    function stopCamera() {
+      stopLoop = true;
+      torchBtn.disabled = true;
+
+      if (video) {
+        video.pause();
+        video.srcObject = null;
+      }
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+        stream = null;
+      }
+
+      setCameraState("idle");
+      stopBtn.disabled = true;
+      startBtn.disabled = false;
+      setStatus("Stopped.");
+    }
+
+    async function updateTorchAvailability() {
       try {
-        toast("Scanning barcode image…");
+        const track = stream?.getVideoTracks?.()?.[0];
+        const caps = track?.getCapabilities?.();
+        const hasTorch = !!caps?.torch;
+        torchBtn.disabled = !hasTorch;
+      } catch {
+        torchBtn.disabled = true;
+      }
+    }
 
-        const img = await fileToImage(file);
-        const decodedText = await decodePDF417FromImage(img);
+    async function toggleTorch() {
+      try {
+        const track = stream?.getVideoTracks?.()?.[0];
+        if (!track) return;
 
-        if (!decodedText) {
-          toast("Could not decode PDF417. Try a clearer image (sharp, well-lit, fills the frame).");
+        const settings = track.getSettings?.();
+        const isOn = !!settings?.torch;
+
+        await track.applyConstraints({ advanced: [{ torch: !isOn }] });
+      } catch (e) {
+        setStatus("Torch not available on this device/browser.");
+      }
+    }
+
+    // --- Scanning loop ---
+    async function scanLoop() {
+      if (stopLoop) return;
+
+      try {
+        // Ensure engine is ready
+        if (!detector && !zxingReader) {
+          await initEngine();
+        }
+
+        // Prefer BarcodeDetector if we have it for pdf417
+        if (detector) {
+          const barcodes = await detector.detect(video);
+          if (barcodes?.length) {
+            // Usually only one barcode; take the first
+            const val = barcodes[0].rawValue || "";
+            publish(val);
+          }
+        } else if (zxingReader) {
+          // ZXing path: draw frame to canvas and decode
+          if (video.readyState >= 2) {
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+
+            // Crop center region to improve speed (PDF417 is typically wide)
+            // You can adjust this crop to match your UI frame.
+            const cropW = Math.floor(w * 0.90);
+            const cropH = Math.floor(h * 0.55);
+            const sx = Math.floor((w - cropW) / 2);
+            const sy = Math.floor((h - cropH) / 2);
+
+            canvas.width = cropW;
+            canvas.height = cropH;
+            ctx.drawImage(video, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+
+            const imageData = ctx.getImageData(0, 0, cropW, cropH);
+
+            // Decode from pixel data
+            const luminance = new zxing.RGBLuminanceSource(imageData.data, cropW, cropH);
+            const binarizer = new zxing.HybridBinarizer(luminance);
+            const bitmap = new zxing.BinaryBitmap(binarizer);
+
+            try {
+              const res = zxingReader.decodeBitmap(bitmap);
+              publish(res?.getText?.() || "");
+            } catch {
+              // expected when nothing is found
+            }
+          }
+        }
+      } catch (e) {
+        // Don’t spam errors; show once
+        setStatus("Scanning… (if it won’t decode, try more light / move closer)");
+      }
+
+      // Scan cadence: 8–12 fps is usually enough and saves battery
+      setTimeout(scanLoop, 110);
+    }
+
+    // --- Photo upload scan (useful when live scanning struggles) ---
+    async function scanImageFile(file) {
+      if (!file) return;
+      await initEngine();
+
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      await img.decode();
+
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      ctx.drawImage(img, 0, 0);
+
+      if (detector) {
+        const barcodes = await detector.detect(canvas);
+        if (barcodes?.length) {
+          publish(barcodes[0].rawValue || "");
           return;
         }
+        setStatus("No PDF417 found in the image.");
+      } else if (zxingReader && zxing) {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const luminance = new zxing.RGBLuminanceSource(imageData.data, canvas.width, canvas.height);
+        const binarizer = new zxing.HybridBinarizer(luminance);
+        const bitmap = new zxing.BinaryBitmap(binarizer);
 
-        // Parse AAMVA (common US DL/ID PDF417 payload format)
-        const data = parseAAMVA(decodedText);
-
-        // Fill fields (best-effort; varies by state/version)
-        if (data.fullName) $("fullName").value = data.fullName;
-        if (data.street) $("street").value = data.street;
-        if (data.city) $("city").value = data.city;
-        if (data.state) $("state").value = data.state;
-        if (data.zip) $("zip").value = data.zip;
-        if (data.gender) $("gender").value = data.gender;
-        if (data.idNumber) $("idNumber").value = data.idNumber;
-
-        if (data.dob) {
-          const age = calculateAge(data.dob);
-          if (Number.isFinite(age)) $("age").value = String(age).padStart(2, "0");
+        try {
+          const res = zxingReader.decodeBitmap(bitmap);
+          publish(res?.getText?.() || "");
+        } catch {
+          setStatus("No PDF417 found in the image.");
         }
+      }
+    }
 
-        // If we see a DL/ID number, assume it's a license
-        if (data.idNumber && !$("idType").value) $("idType").value = "DL";
-
-        toast("Decoded! Fields auto-filled.");
-      } catch (err) {
-        console.error(err);
-        toast("Scan failed. Try another image or check console for details.");
-      } finally {
-        // allow re-uploading same file again
-        e.target.value = "";
+    // --- Events ---
+    startBtn.addEventListener("click", async () => {
+      try {
+        setStatus("Requesting camera permission…");
+        await initEngine();
+        await startCamera();
+        setStatus("Scanning…");
+      } catch (e) {
+        console.error(e);
+        setStatus("Camera blocked. Enable camera permissions for this site in iPhone Settings → Safari.");
       }
     });
 
-    // --- Helpers: file -> image ---
-    function fileToImage(file) {
-      return new Promise((resolve, reject) => {
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-        img.onload = () => {
-          URL.revokeObjectURL(url);
-          resolve(img);
-        };
-        img.onerror = reject;
-        img.src = url;
-      });
-    }
+    stopBtn.addEventListener("click", stopCamera);
+    torchBtn.addEventListener("click", toggleTorch);
 
-    // --- Decode PDF417 using ZXing ---
-    async function decodePDF417FromImage(img) {
-      // Draw to canvas
-      const canvas = $("canvas");
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-
-      // Keep original resolution (better for decoding), but cap huge images
-      const maxDim = 1800;
-      let w = img.naturalWidth;
-      let h = img.naturalHeight;
-      if (Math.max(w, h) > maxDim) {
-        const s = maxDim / Math.max(w, h);
-        w = Math.round(w * s);
-        h = Math.round(h * s);
-      }
-
-      canvas.width = w;
-      canvas.height = h;
-      ctx.drawImage(img, 0, 0, w, h);
-
-      const imageData = ctx.getImageData(0, 0, w, h);
-
-      // Build luminance source
-      const { RGBLuminanceSource, BinaryBitmap, HybridBinarizer, PDF417Reader } = ZXing;
-      const luminanceSource = new RGBLuminanceSource(imageData.data, w, h);
-      const binaryBitmap = new BinaryBitmap(new HybridBinarizer(luminanceSource));
-
-      const reader = new PDF417Reader();
-
+    fileInput.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
       try {
-        const result = reader.decode(binaryBitmap);
-        return result?.getText?.() ?? "";
-      } catch (_) {
-        // Some images decode better inverted; try a second pass with quick invert
-        try {
-          invertCanvas(ctx, w, h);
-          const invData = ctx.getImageData(0, 0, w, h);
-          const invSource = new RGBLuminanceSource(invData.data, w, h);
-          const invBitmap = new BinaryBitmap(new HybridBinarizer(invSource));
-          const invResult = reader.decode(invBitmap);
-          return invResult?.getText?.() ?? "";
-        } catch (__) {
-          return "";
-        }
+        setStatus("Decoding image…");
+        await scanImageFile(file);
+      } catch (err) {
+        console.error(err);
+        setStatus("Could not decode that image.");
+      } finally {
+        fileInput.value = "";
       }
-    }
+    });
 
-    function invertCanvas(ctx, w, h){
-      const imgData = ctx.getImageData(0,0,w,h);
-      const d = imgData.data;
-      for (let i=0;i<d.length;i+=4){
-        d[i]   = 255 - d[i];
-        d[i+1] = 255 - d[i+1];
-        d[i+2] = 255 - d[i+2];
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(resultEl.value || "");
+        setStatus("Copied to clipboard.");
+      } catch {
+        setStatus("Copy failed (clipboard permissions). Select text and copy manually.");
       }
-      ctx.putImageData(imgData,0,0);
-    }
+    });
 
-    // --- AAMVA parsing (best-effort) ---
-    // Real IDs / DLs typically include AAMVA codes like:
-    // DCS (last), DAC (first), DAD (middle), DAG (street), DAI (city),
-    // DAJ (state), DAK (zip), DBB (DOB), DBC (sex), DAQ (ID number)
-    function parseAAMVA(rawText) {
-      const text = normalizeAAMVA(rawText);
+    clearBtn.addEventListener("click", () => {
+      resultEl.value = "";
+      lastText = "";
+      setStatus("Cleared.");
+    });
 
-      // Split into lines and scan for field codes
-      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-
-      const get = (code) => {
-        const line = lines.find(l => l.startsWith(code));
-        return line ? line.slice(code.length).trim() : "";
-      };
-
-      const last = get("DCS");
-      const first = get("DAC");
-      const middle = get("DAD");
-      const street = get("DAG");
-      const city = get("DAI");
-      const state = get("DAJ");
-      const zipRaw = get("DAK");
-      const genderCode = get("DBC"); // 1=Male, 2=Female in older; M/F in some
-      const idNumber = get("DAQ");
-      const dobRaw = get("DBB"); // often MMDDYYYY or YYYYMMDD depending on version/state
-
-      const fullName = [first, middle, last].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-      const zip = zipRaw ? zipRaw.replace(/[^\d]/g, "").slice(0, 5) : "";
-
-      const gender = normalizeGender(genderCode);
-      const dob = parseDOB(dobRaw);
-
-      return {
-        raw: text,
-        first, middle, last,
-        fullName: fullName || "",
-        street: street || "",
-        city: city || "",
-        state: state || "",
-        zip,
-        gender,
-        dob,
-        idNumber: idNumber || "",
-      };
-    }
-
-    function normalizeAAMVA(s) {
-      // Strip non-printable, keep newlines
-      return String(s)
-        .replace(/\u0000/g, "")
-        .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "") // keep tabs/newlines/printables
-        .trim();
-    }
-
-    function normalizeGender(v) {
-      const x = String(v || "").trim().toUpperCase();
-      if (!x) return "";
-      if (x === "M" || x === "F" || x === "X") return x;
-      // Older AAMVA: 1=male, 2=female, 9=not specified
-      if (x === "1") return "M";
-      if (x === "2") return "F";
-      return "";
-    }
-
-    function parseDOB(dobRaw) {
-      const s = String(dobRaw || "").replace(/[^\d]/g, "");
-      if (s.length !== 8) return null;
-
-      // Try MMDDYYYY first (common)
-      let mm = parseInt(s.slice(0,2),10);
-      let dd = parseInt(s.slice(2,4),10);
-      let yyyy = parseInt(s.slice(4,8),10);
-
-      if (isValidDateParts(yyyy, mm, dd)) return new Date(yyyy, mm - 1, dd);
-
-      // Try YYYYMMDD
-      yyyy = parseInt(s.slice(0,4),10);
-      mm = parseInt(s.slice(4,6),10);
-      dd = parseInt(s.slice(6,8),10);
-
-      if (isValidDateParts(yyyy, mm, dd)) return new Date(yyyy, mm - 1, dd);
-
-      return null;
-    }
-
-    function isValidDateParts(y,m,d){
-      if (y < 1900 || y > 2100) return false;
-      if (m < 1 || m > 12) return false;
-      if (d < 1 || d > 31) return false;
-      const dt = new Date(y, m-1, d);
-      return dt.getFullYear() === y && dt.getMonth() === (m-1) && dt.getDate() === d;
-    }
-
-    function calculateAge(dobDate) {
-      const today = new Date();
-      let age = today.getFullYear() - dobDate.getFullYear();
-      const m = today.getMonth() - dobDate.getMonth();
-      if (m < 0 || (m === 0 && today.getDate() < dobDate.getDate())) age--;
-      return age;
-    }
+    // Initial capability message
+    (async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setEngine("No camera API", "warn");
+        setStatus("This browser doesn’t support camera access. Try Safari on iOS 15+.");
+        startBtn.disabled = true;
+      } else {
+        await initEngine();
+        setStatus("Ready. Tap Start Camera.");
+      }
+    })();
   </script>
 </body>
 </html>
