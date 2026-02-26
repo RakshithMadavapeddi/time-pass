@@ -153,21 +153,15 @@
 
   <main class="scanner-body">
     <div class="camera-preview">
-      <!-- Live camera -->
       <video id="scannerVideo" autoplay playsinline muted></video>
 
-      <!-- Overlay + alignment guide -->
       <div class="scan-overlay" aria-hidden="true">
-        <div class="scan-guide">
+        <div class="scan-guide" id="scanGuide">
           <div class="scan-guide-inner"></div>
         </div>
       </div>
 
-      <!-- Canvas for frame capture (hidden) -->
-      <canvas id="scannerCanvas" class="hidden"></canvas>
-
-      <!-- Status -->
-      <div class="scanner-status" id="scannerStatus">Initializing camera…</div>
+      <div class="scanner-status" id="scannerStatus">Starting camera…</div>
     </div>
 
     <div class="scanner-panel">
@@ -177,20 +171,11 @@
       </div>
 
       <p class="muted scanner-note">
-        Tip: Move the PDF417 barcode fully inside the guide box.
+        Keep the PDF417 barcode fully inside the guide box.
       </p>
-
-      <details class="muted">
-        <summary>Troubleshooting</summary>
-        <ul class="muted">
-          <li>If PDF417 isn’t detected on this device/browser, use a decoder library fallback (ZXing/Dynamsoft).</li>
-          <li>On iOS Safari, PDF417 support is limited without a library/native wrapper.</li>
-        </ul>
-      </details>
     </div>
   </main>
 </section>
-
 
   <!-- =============== 3A) RETURNING GUEST =============== -->
   <section id="returningGuest" class="screen" aria-label="Returning Guest">
@@ -613,6 +598,9 @@
     <span id="snackbarMsg"></span>
     <button class="snackbar-close" type="button" aria-label="Dismiss" id="snackbarCloseBtn">✕</button>
   </div>
+
+  <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js"></script>
+
 
   <script src="app.js"></script>
 </body>
