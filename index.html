@@ -116,7 +116,7 @@
         </div>
 
         <div class="form-group">
-          <label for="idType">Type of Identification</label>
+          <label for="idType">Type of Identification <span class="req">*</span></label>
           <select id="idType" name="idType">
             <option value="">Select</option>
             <option value="DL">DL</option>
@@ -143,39 +143,40 @@
   </section>
 
 
-<!-- =============== 2) SCANNER =============== -->
-<section id="scanner" class="screen" aria-label="Scanner">
-  <header class="topbar">
-    <button class="icon-btn" type="button" aria-label="Close Scanner" data-nav="guestRegistration" id="scannerCloseBtn">✕</button>
-    <h1 class="title center">Scanner</h1>
-    <button class="icon-btn" type="button" aria-label="Flash Toggle" id="flashToggleBtn">⚡</button>
-  </header>
+  <!-- =============== 2) SCANNER (REAL PDF417) =============== -->
+  <section id="scanner" class="screen" aria-label="Scanner">
+    <header class="topbar">
+      <button class="icon-btn" type="button" aria-label="Close Scanner" id="scannerCloseBtn">✕</button>
+      <h1 class="title center">Scanner</h1>
+      <button class="icon-btn" type="button" aria-label="Flash Toggle" id="flashToggleBtn">⚡</button>
+    </header>
 
-  <main class="scanner-body">
-    <div class="camera-preview">
-      <video id="scannerVideo" autoplay playsinline muted></video>
+    <main class="scanner-body">
+      <div class="camera-preview">
+        <video id="scannerVideo" autoplay playsinline muted></video>
 
-      <div class="scan-overlay" aria-hidden="true">
-        <div class="scan-guide" id="scanGuide">
-          <div class="scan-guide-inner"></div>
+        <div class="scan-overlay" aria-hidden="true">
+          <div class="scan-guide" id="scanGuide">
+            <div class="scan-guide-inner"></div>
+          </div>
         </div>
+
+        <div class="scanner-status" id="scannerStatus">Starting camera…</div>
       </div>
 
-      <div class="scanner-status" id="scannerStatus">Starting camera…</div>
-    </div>
+      <div class="scanner-panel">
+        <div class="scanner-actions">
+          <button class="secondary-btn" type="button" id="switchCameraBtn">Switch Camera</button>
+          <button class="secondary-btn" type="button" id="pauseResumeBtn">Pause</button>
+        </div>
 
-    <div class="scanner-panel">
-      <div class="scanner-actions">
-        <button class="secondary-btn" type="button" id="switchCameraBtn">Switch Camera</button>
-        <button class="secondary-btn" type="button" id="pauseResumeBtn">Pause</button>
+        <p class="muted scanner-note">
+          Keep the PDF417 barcode fully inside the guide box.
+        </p>
       </div>
+    </main>
+  </section>
 
-      <p class="muted scanner-note">
-        Keep the PDF417 barcode fully inside the guide box.
-      </p>
-    </div>
-  </main>
-</section>
 
   <!-- =============== 3A) RETURNING GUEST =============== -->
   <section id="returningGuest" class="screen" aria-label="Returning Guest">
@@ -186,8 +187,8 @@
 
     <main class="content">
       <div class="card">
-        <h2 class="card-title" id="returningName">John Q Doe</h2>
-        <p class="muted" id="returningMeta">DL • D12345678</p>
+        <h2 class="card-title" id="returningName">Guest</h2>
+        <p class="muted" id="returningMeta">DL • —</p>
 
         <div class="card-grid">
           <div class="info">
@@ -223,7 +224,7 @@
     <main class="content">
       <div class="hero">
         <div class="hero-title">New User</div>
-        <div class="hero-sub" id="newGuestSummary">John Q Doe • DL • D12345678</div>
+        <div class="hero-sub" id="newGuestSummary">—</div>
       </div>
 
       <div class="card">
@@ -342,18 +343,14 @@
     </header>
 
     <main class="content">
-      <div class="card" id="summaryCard">
+      <div class="card">
         <h2 class="card-title">Booking Summary</h2>
         <div class="summary-lines" id="summaryLines"></div>
       </div>
 
       <div class="card total-card">
-        <div class="total-row">
-          <div>
-            <div class="muted">Total Amount</div>
-            <div class="total-amount" id="totalAmount">$0.00</div>
-          </div>
-        </div>
+        <div class="muted">Total Amount</div>
+        <div class="total-amount" id="totalAmount">$0.00</div>
       </div>
 
       <div class="card">
@@ -599,8 +596,8 @@
     <button class="snackbar-close" type="button" aria-label="Dismiss" id="snackbarCloseBtn">✕</button>
   </div>
 
+  <!-- ZXing (PDF417 decoder) -->
   <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js"></script>
-
 
   <script src="app.js"></script>
 </body>
