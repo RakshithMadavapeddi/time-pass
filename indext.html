@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Guest Registration</title>
+
+  <!-- ZXing (PDF417) -->
+  <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+
+  <style>
+    :root{
+      --bg:#f3f3f3;
+      --card:#ffffff;
+      --text:#1a1a1a;
+      --muted:#6b6b6b;
+      --border:#dcdcdc;
+      --shadow: 0 1px 0 rgba(0,0,0,0.06);
+      --radius: 10px;
+      --pad: 16px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    /* Top app bar */
+    .appbar{
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      height: 64px;
+      background: #fff;
+      display:flex;
+      align-items:center;
+      gap: 12px;
+      padding: 0 14px;
+      border-bottom: 1px solid #e6e6e6;
+    }
+    .icon-btn{
+      border:0;
+      background:transparent;
+      padding:10px;
+      border-radius:12px;
+      cursor:pointer;
+    }
+    .icon-btn:active{background:#f0f0f0}
+    .title{
+      flex:1;
+      text-align:center;
+      font-weight: 800;
+      font-size: 32px;
+      letter-spacing: -0.5px;
+      margin-right: 44px; /* balances right icon */
+    }
+    .bar{
+      height: 6px;
+      background: #111;
+      width: 120px;
+      margin-top: -1px;
+    }
+
+    /* Page container */
+    .page{
+      max-width: 520px;
+      margin: 0 auto;
+      padding-bottom: 96px; /* space for bottom button */
+    }
+
+    .section{
+      padding: 18px 18px 0;
+    }
+
+    label{
+      display:block;
+      font-size: 28px;
+      font-weight: 800;
+      margin: 18px 0 10px;
+    }
+    .req::after{content:"*"; margin-left:2px;}
+    .field{
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 14px;
+      font-size: 26px;
+      width: 100%;
+      outline: none;
+      box-shadow: var(--shadow);
+    }
+    .field::placeholder{color:#8b8b8b}
+    .field:focus{
+      border-color:#bdbdbd;
+    }
+
+    .row{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      align-items:end;
+    }
+
+    .select-wrap{
+      position: relative;
+    }
+    select.field{
+      appearance:none;
+      padding-right: 48px;
+      background: #fff;
+    }
+    .chev{
+      position:absolute;
+      right: 14px;
+      bottom: 16px;
+      width: 18px;
+      height: 18px;
+      pointer-events:none;
+      border-right: 3px solid #333;
+      border-bottom: 3px solid #333;
+      transform: rotate(45deg);
+      opacity: .85;
+    }
+
+    .hint{
+      font-size: 14px;
+      color: var(--muted);
+      margin-top: 8px;
+      line-height: 1.35;
+    }
+
+    /* Bottom fixed button */
+    .bottom{
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 14px;
+      background: linear-gradient(to top, rgba(243,243,243,1), rgba(243,243,243,0));
+    }
+    .next{
+      max-width: 520px;
+      margin: 0 auto;
+      display:block;
+      width: calc(100% - 28px);
+      height: 72px;
+      border-radius: 8px;
+      background: #000;
+      color:#fff;
+      font-size: 26px;
+      font-weight: 700;
+      border: none;
+      cursor:pointer;
+    }
+    .toast{
+      max-width: 520px;
+      margin: 10px auto 0;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: #fff;
+      border: 1px solid #e1e1e1;
+      color: #333;
+      font-size: 14px;
+      display:none;
+    }
+
+    /* Hidden helpers */
+    #barcodeFile{display:none;}
+    canvas{display:none;}
+  </style>
+</head>
+
+<body>
+  <header class="appbar">
+    <button class="icon-btn" aria-label="Back" title="Back" onclick="history.back()">
+      <!-- back arrow -->
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M15 18l-6-6 6-6" stroke="#111" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
+    <div class="title">Guest Registration</div>
+
+    <button class="icon-btn" id="scanBtn" aria-label="Upload barcode image" title="Upload barcode image">
+      <!-- barcode icon -->
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 7v10M7 7v10M10 7v10M14 7v10M17 7v10M20 7v10" stroke="#111" stroke-width="1.9" stroke-linecap="round"/>
+        <path d="M3 6h3M3 18h3M18 6h3M18 18h3" stroke="#111" stroke-width="1.9" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </header>
+  <div class="bar"></div>
+
+  <main class="page">
+    <div class="section">
+      <label class="req" for="fullName">Full Name</label>
+      <input class="field" id="fullName" placeholder="Enter Full Name" autocomplete="name" />
+
+      <label class="req" for="street">Street Address</label>
+      <input class="field" id="street" placeholder="Enter Street Address" autocomplete="street-address" />
+
+      <label class="req" for="city">City</label>
+      <input class="field" id="city" placeholder="Enter City" autocomplete="address-level2" />
+
+      <div class="row">
+        <div>
+          <label class="req" for="state">State</label>
+          <div class="select-wrap">
+            <select class="field" id="state" autocomplete="address-level1">
+              <option value="" selected>Select</option>
+              <!-- common list; extend as needed -->
+              <option>AL</option><option>AK</option><option>AZ</option><option>AR</option><option>CA</option>
+              <option>CO</option><option>CT</option><option>DE</option><option>FL</option><option>GA</option>
+              <option>HI</option><option>ID</option><option>IL</option><option>IN</option><option>IA</option>
+              <option>KS</option><option>KY</option><option>LA</option><option>ME</option><option>MD</option>
+              <option>MA</option><option>MI</option><option>MN</option><option>MS</option><option>MO</option>
+              <option>MT</option><option>NE</option><option>NV</option><option>NH</option><option>NJ</option>
+              <option>NM</option><option>NY</option><option>NC</option><option>ND</option><option>OH</option>
+              <option>OK</option><option>OR</option><option>PA</option><option>RI</option><option>SC</option>
+              <option>SD</option><option>TN</option><option>TX</option><option>UT</option><option>VT</option>
+              <option>VA</option><option>WA</option><option>WV</option><option>WI</option><option>WY</option>
+            </select>
+            <span class="chev"></span>
+          </div>
+        </div>
+
+        <div>
+          <label class="req" for="zip">Zip Code</label>
+          <input class="field" id="zip" placeholder="5-digit ZIP code" inputmode="numeric" autocomplete="postal-code" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label class="req" for="gender">Gender</label>
+          <div class="select-wrap">
+            <select class="field" id="gender">
+              <option value="" selected>Select</option>
+              <option value="M">Male</option>
+              <option value="F">Female</option>
+              <option value="X">X</option>
+            </select>
+            <span class="chev"></span>
+          </div>
+        </div>
+
+        <div>
+          <label class="req" for="age">Age</label>
+          <input class="field" id="age" placeholder="00" inputmode="numeric" />
+        </div>
+      </div>
+
+      <label for="idType">Type of Identification</label>
+      <div class="select-wrap">
+        <select class="field" id="idType">
+          <option value="" selected>Select</option>
+          <option value="DL">Driver License</option>
+          <option value="STATE_ID">State ID</option>
+          <option value="PASSPORT">Passport</option>
+          <option value="OTHER">Other</option>
+        </select>
+        <span class="chev"></span>
+      </div>
+
+      <label class="req" for="idNumber">Identification Number</label>
+      <input class="field" id="idNumber" placeholder="0000000000" />
+
+      <p class="hint">
+        Tip: Use the barcode button (top-right) to upload a clear photo of the PDF417 barcode on the back of a US ID.
+        The form will auto-fill if the barcode decodes successfully.
+      </p>
+
+      <div class="toast" id="toast"></div>
+
+      <input id="barcodeFile" type="file" accept="image/*" />
+      <canvas id="canvas"></canvas>
+    </div>
+  </main>
+
+  <footer class="bottom">
+    <button class="next" type="button" onclick="alert('Next clicked')">Next</button>
+  </footer>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const toastEl = $("toast");
+    function toast(msg) {
+      toastEl.textContent = msg;
+      toastEl.style.display = "block";
+      clearTimeout(toastEl._t);
+      toastEl._t = setTimeout(() => (toastEl.style.display = "none"), 5000);
+    }
+
+    // --- Barcode upload button ---
+    $("scanBtn").addEventListener("click", () => $("barcodeFile").click());
+
+    $("barcodeFile").addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        toast("Scanning barcode image…");
+
+        const img = await fileToImage(file);
+        const decodedText = await decodePDF417FromImage(img);
+
+        if (!decodedText) {
+          toast("Could not decode PDF417. Try a clearer image (sharp, well-lit, fills the frame).");
+          return;
+        }
+
+        // Parse AAMVA (common US DL/ID PDF417 payload format)
+        const data = parseAAMVA(decodedText);
+
+        // Fill fields (best-effort; varies by state/version)
+        if (data.fullName) $("fullName").value = data.fullName;
+        if (data.street) $("street").value = data.street;
+        if (data.city) $("city").value = data.city;
+        if (data.state) $("state").value = data.state;
+        if (data.zip) $("zip").value = data.zip;
+        if (data.gender) $("gender").value = data.gender;
+        if (data.idNumber) $("idNumber").value = data.idNumber;
+
+        if (data.dob) {
+          const age = calculateAge(data.dob);
+          if (Number.isFinite(age)) $("age").value = String(age).padStart(2, "0");
+        }
+
+        // If we see a DL/ID number, assume it's a license
+        if (data.idNumber && !$("idType").value) $("idType").value = "DL";
+
+        toast("Decoded! Fields auto-filled.");
+      } catch (err) {
+        console.error(err);
+        toast("Scan failed. Try another image or check console for details.");
+      } finally {
+        // allow re-uploading same file again
+        e.target.value = "";
+      }
+    });
+
+    // --- Helpers: file -> image ---
+    function fileToImage(file) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve(img);
+        };
+        img.onerror = reject;
+        img.src = url;
+      });
+    }
+
+    // --- Decode PDF417 using ZXing ---
+    async function decodePDF417FromImage(img) {
+      // Draw to canvas
+      const canvas = $("canvas");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+      // Keep original resolution (better for decoding), but cap huge images
+      const maxDim = 1800;
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+      if (Math.max(w, h) > maxDim) {
+        const s = maxDim / Math.max(w, h);
+        w = Math.round(w * s);
+        h = Math.round(h * s);
+      }
+
+      canvas.width = w;
+      canvas.height = h;
+      ctx.drawImage(img, 0, 0, w, h);
+
+      const imageData = ctx.getImageData(0, 0, w, h);
+
+      // Build luminance source
+      const { RGBLuminanceSource, BinaryBitmap, HybridBinarizer, PDF417Reader } = ZXing;
+      const luminanceSource = new RGBLuminanceSource(imageData.data, w, h);
+      const binaryBitmap = new BinaryBitmap(new HybridBinarizer(luminanceSource));
+
+      const reader = new PDF417Reader();
+
+      try {
+        const result = reader.decode(binaryBitmap);
+        return result?.getText?.() ?? "";
+      } catch (_) {
+        // Some images decode better inverted; try a second pass with quick invert
+        try {
+          invertCanvas(ctx, w, h);
+          const invData = ctx.getImageData(0, 0, w, h);
+          const invSource = new RGBLuminanceSource(invData.data, w, h);
+          const invBitmap = new BinaryBitmap(new HybridBinarizer(invSource));
+          const invResult = reader.decode(invBitmap);
+          return invResult?.getText?.() ?? "";
+        } catch (__) {
+          return "";
+        }
+      }
+    }
+
+    function invertCanvas(ctx, w, h){
+      const imgData = ctx.getImageData(0,0,w,h);
+      const d = imgData.data;
+      for (let i=0;i<d.length;i+=4){
+        d[i]   = 255 - d[i];
+        d[i+1] = 255 - d[i+1];
+        d[i+2] = 255 - d[i+2];
+      }
+      ctx.putImageData(imgData,0,0);
+    }
+
+    // --- AAMVA parsing (best-effort) ---
+    // Real IDs / DLs typically include AAMVA codes like:
+    // DCS (last), DAC (first), DAD (middle), DAG (street), DAI (city),
+    // DAJ (state), DAK (zip), DBB (DOB), DBC (sex), DAQ (ID number)
+    function parseAAMVA(rawText) {
+      const text = normalizeAAMVA(rawText);
+
+      // Split into lines and scan for field codes
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+      const get = (code) => {
+        const line = lines.find(l => l.startsWith(code));
+        return line ? line.slice(code.length).trim() : "";
+      };
+
+      const last = get("DCS");
+      const first = get("DAC");
+      const middle = get("DAD");
+      const street = get("DAG");
+      const city = get("DAI");
+      const state = get("DAJ");
+      const zipRaw = get("DAK");
+      const genderCode = get("DBC"); // 1=Male, 2=Female in older; M/F in some
+      const idNumber = get("DAQ");
+      const dobRaw = get("DBB"); // often MMDDYYYY or YYYYMMDD depending on version/state
+
+      const fullName = [first, middle, last].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+      const zip = zipRaw ? zipRaw.replace(/[^\d]/g, "").slice(0, 5) : "";
+
+      const gender = normalizeGender(genderCode);
+      const dob = parseDOB(dobRaw);
+
+      return {
+        raw: text,
+        first, middle, last,
+        fullName: fullName || "",
+        street: street || "",
+        city: city || "",
+        state: state || "",
+        zip,
+        gender,
+        dob,
+        idNumber: idNumber || "",
+      };
+    }
+
+    function normalizeAAMVA(s) {
+      // Strip non-printable, keep newlines
+      return String(s)
+        .replace(/\u0000/g, "")
+        .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "") // keep tabs/newlines/printables
+        .trim();
+    }
+
+    function normalizeGender(v) {
+      const x = String(v || "").trim().toUpperCase();
+      if (!x) return "";
+      if (x === "M" || x === "F" || x === "X") return x;
+      // Older AAMVA: 1=male, 2=female, 9=not specified
+      if (x === "1") return "M";
+      if (x === "2") return "F";
+      return "";
+    }
+
+    function parseDOB(dobRaw) {
+      const s = String(dobRaw || "").replace(/[^\d]/g, "");
+      if (s.length !== 8) return null;
+
+      // Try MMDDYYYY first (common)
+      let mm = parseInt(s.slice(0,2),10);
+      let dd = parseInt(s.slice(2,4),10);
+      let yyyy = parseInt(s.slice(4,8),10);
+
+      if (isValidDateParts(yyyy, mm, dd)) return new Date(yyyy, mm - 1, dd);
+
+      // Try YYYYMMDD
+      yyyy = parseInt(s.slice(0,4),10);
+      mm = parseInt(s.slice(4,6),10);
+      dd = parseInt(s.slice(6,8),10);
+
+      if (isValidDateParts(yyyy, mm, dd)) return new Date(yyyy, mm - 1, dd);
+
+      return null;
+    }
+
+    function isValidDateParts(y,m,d){
+      if (y < 1900 || y > 2100) return false;
+      if (m < 1 || m > 12) return false;
+      if (d < 1 || d > 31) return false;
+      const dt = new Date(y, m-1, d);
+      return dt.getFullYear() === y && dt.getMonth() === (m-1) && dt.getDate() === d;
+    }
+
+    function calculateAge(dobDate) {
+      const today = new Date();
+      let age = today.getFullYear() - dobDate.getFullYear();
+      const m = today.getMonth() - dobDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < dobDate.getDate())) age--;
+      return age;
+    }
+  </script>
+</body>
+</html>
