@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hotel Check-In Flow</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- =============== 0) DASHBOARD =============== -->
+  <section id="dashboard" class="screen active" aria-label="Dashboard">
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="title">Example XYZ Hotels</h1>
+      </div>
+      <div class="topbar-right">
+        <button class="icon-btn" type="button" aria-label="Profile" data-action="profile">👤</button>
+        <button class="icon-btn" type="button" aria-label="Logout" data-action="logout">⎋</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <p class="greeting" id="dashboardGreeting">Good Afternoon, John Doe.</p>
+
+      <button class="tile tile-primary" type="button" data-nav="guestRegistration">Check-In</button>
+      <button class="tile tile-disabled" type="button" disabled aria-disabled="true">Check-Out</button>
+      <button class="tile tile-disabled" type="button" disabled aria-disabled="true">Stay-Over</button>
+
+      <div class="divider"><span>Other</span></div>
+
+      <div class="grid-2">
+        <button class="tile tile-muted" type="button" data-action="other">Dashboard</button>
+        <button class="tile tile-muted" type="button" data-action="other">Bookings</button>
+      </div>
+
+      <div class="grid-2">
+        <button class="tile tile-muted" type="button" data-action="other">Reports</button>
+        <button class="tile tile-muted" type="button" data-action="other">Payments</button>
+      </div>
+    </main>
+
+    <footer class="footer">Version 1.0</footer>
+  </section>
+
+
+  <!-- =============== 1) GUEST REGISTRATION =============== -->
+  <section id="guestRegistration" class="screen" aria-label="Guest Registration">
+    <header class="topbar">
+      <button class="icon-btn" type="button" aria-label="Back" data-nav="dashboard">←</button>
+      <h1 class="title center">Guest Registration</h1>
+      <button class="icon-btn" type="button" aria-label="Scan ID" data-nav="scanner">📷</button>
+    </header>
+
+    <div class="progress" aria-hidden="true">
+      <div class="step active"></div>
+      <div class="step"></div>
+      <div class="step"></div>
+      <div class="step"></div>
+    </div>
+
+    <main class="content">
+      <form id="registrationForm" novalidate>
+        <div class="form-group">
+          <label for="fullName">Full Name <span class="req">*</span></label>
+          <input id="fullName" name="fullName" type="text" placeholder="Enter Full Name" autocomplete="name" />
+          <p class="field-error" data-error-for="fullName"></p>
+        </div>
+
+        <div class="form-group">
+          <label for="street">Street Address <span class="req">*</span></label>
+          <input id="street" name="street" type="text" placeholder="Enter Street Address" autocomplete="street-address" />
+          <p class="field-error" data-error-for="street"></p>
+        </div>
+
+        <div class="form-group">
+          <label for="city">City <span class="req">*</span></label>
+          <input id="city" name="city" type="text" placeholder="Enter City" autocomplete="address-level2" />
+          <p class="field-error" data-error-for="city"></p>
+        </div>
+
+        <div class="row">
+          <div class="form-group">
+            <label for="state">State <span class="req">*</span></label>
+            <select id="state" name="state">
+              <option value="">Select</option>
+            </select>
+            <p class="field-error" data-error-for="state"></p>
+          </div>
+
+          <div class="form-group">
+            <label for="zip">Zip Code <span class="req">*</span></label>
+            <input id="zip" name="zip" type="text" inputmode="numeric" placeholder="5-digit ZIP code" />
+            <p class="field-error" data-error-for="zip"></p>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="form-group">
+            <label for="gender">Gender <span class="req">*</span></label>
+            <select id="gender" name="gender">
+              <option value="">Select</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+            <p class="field-error" data-error-for="gender"></p>
+          </div>
+
+          <div class="form-group">
+            <label for="age">Age <span class="req">*</span></label>
+            <input id="age" name="age" type="number" min="0" placeholder="00" />
+            <p class="hint">Derived from DOB (DBB) when scanning.</p>
+            <p class="field-error" data-error-for="age"></p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="idType">Type of Identification <span class="req">*</span></label>
+          <select id="idType" name="idType">
+            <option value="">Select</option>
+            <option value="DL">DL</option>
+            <option value="ID">ID</option>
+          </select>
+          <p class="field-error" data-error-for="idType"></p>
+        </div>
+
+        <div class="form-group">
+          <label for="idNumber">Identification Number <span class="req">*</span></label>
+          <input id="idNumber" name="idNumber" type="text" placeholder="0000000000" />
+          <p class="field-error" data-error-for="idNumber"></p>
+        </div>
+
+        <!-- Stored even if UI shows only Age -->
+        <input id="dob" name="dob" type="hidden" />
+        <input id="rawScan" name="rawScan" type="hidden" />
+      </form>
+    </main>
+
+    <footer class="bottom-bar">
+      <button class="primary-btn" type="button" id="registrationNextBtn">Next</button>
+    </footer>
+  </section>
+
+
+  <!-- =============== 2) SCANNER (REAL PDF417) =============== -->
+  <section id="scanner" class="screen" aria-label="Scanner">
+    <header class="topbar">
+      <button class="icon-btn" type="button" aria-label="Close Scanner" id="scannerCloseBtn">✕</button>
+      <h1 class="title center">Scanner</h1>
+      <button class="icon-btn" type="button" aria-label="Flash Toggle" id="flashToggleBtn">⚡</button>
+    </header>
+
+    <main class="scanner-body">
+      <div class="camera-preview">
+        <video id="scannerVideo" autoplay playsinline muted></video>
+
+        <div class="scan-overlay" aria-hidden="true">
+          <div class="scan-guide" id="scanGuide">
+            <div class="scan-guide-inner"></div>
+          </div>
+        </div>
+
+        <div class="scanner-status" id="scannerStatus">Starting camera…</div>
+      </div>
+
+      <div class="scanner-panel">
+        <div class="scanner-meta">
+          <span class="pill" id="enginePill">Engine: …</span>
+          <span class="pill" id="cameraPill">Camera: idle</span>
+        </div>
+
+        <div class="scanner-actions">
+          <button class="secondary-btn" type="button" id="startScannerBtn">Start Camera</button>
+          <button class="secondary-btn" type="button" id="stopScannerBtn">Stop</button>
+        </div>
+
+        <div class="scanner-actions">
+          <button class="secondary-btn" type="button" id="switchCameraBtn">Switch Camera</button>
+          <button class="secondary-btn" type="button" id="pauseResumeBtn">Pause</button>
+        </div>
+
+        <div class="scanner-actions">
+          <button class="secondary-btn" type="button" id="torchBtn">Toggle Torch</button>
+          <label class="secondary-btn file-like" for="fileInput">Scan from Photo</label>
+          <input id="fileInput" type="file" accept="image/*" class="hidden" />
+        </div>
+
+        <p class="muted scanner-note">
+          Keep the PDF417 barcode fully inside the guide box.
+        </p>
+      </div>
+    </main>
+  </section>
+
+
+  <!-- =============== 3A) RETURNING GUEST =============== -->
+  <section id="returningGuest" class="screen" aria-label="Returning Guest">
+    <header class="topbar">
+      <h1 class="title">Returning Guest</h1>
+      <div></div>
+    </header>
+
+    <main class="content">
+      <div class="card">
+        <h2 class="card-title" id="returningName">Guest</h2>
+        <p class="muted" id="returningMeta">DL • —</p>
+
+        <div class="card-grid">
+          <div class="info">
+            <div class="info-label">Rating</div>
+            <div class="info-value" id="returningRating">4.6</div>
+          </div>
+          <div class="info">
+            <div class="info-label">Active since</div>
+            <div class="info-value" id="returningSince">2022</div>
+          </div>
+          <div class="info">
+            <div class="info-label">Latest activity</div>
+            <div class="info-value" id="returningActivity">Stay-over • Jan 2026</div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="bottom-bar two">
+      <button class="secondary-btn" type="button" data-nav="guestRegistration">Cancel</button>
+      <button class="primary-btn" type="button" id="returningProceedBtn">Proceed</button>
+    </footer>
+  </section>
+
+
+  <!-- =============== 3B) NEW GUEST =============== -->
+  <section id="newGuest" class="screen" aria-label="New Guest">
+    <header class="topbar">
+      <h1 class="title">New User</h1>
+      <div></div>
+    </header>
+
+    <main class="content">
+      <div class="hero">
+        <div class="hero-title">New User</div>
+        <div class="hero-sub" id="newGuestSummary">—</div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Guest Summary</h2>
+        <p class="muted" id="newGuestDetails">No matching record found.</p>
+      </div>
+    </main>
+
+    <footer class="bottom-bar two">
+      <button class="secondary-btn" type="button" id="newGuestSkipBtn">Skip</button>
+      <button class="primary-btn" type="button" id="newGuestSaveBtn">Save</button>
+    </footer>
+  </section>
+
+
+  <!-- =============== 4) STAY DETAILS =============== -->
+  <section id="stayDetails" class="screen" aria-label="Stay Details">
+    <header class="topbar">
+      <button class="icon-btn" type="button" aria-label="Close" id="stayCloseBtn">✕</button>
+      <h1 class="title center">Stay Details</h1>
+      <div></div>
+    </header>
+
+    <main class="content">
+      <form id="stayForm" novalidate>
+        <div class="row">
+          <div class="form-group">
+            <label for="checkIn">Check-in date <span class="req">*</span></label>
+            <input id="checkIn" type="date" />
+            <p class="field-error" data-error-for="checkIn"></p>
+          </div>
+
+          <div class="form-group">
+            <label for="checkOut">Check-out date <span class="req">*</span></label>
+            <input id="checkOut" type="date" />
+            <p class="field-error" data-error-for="checkOut"></p>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="form-group">
+            <label for="adults">Adults <span class="req">*</span></label>
+            <select id="adults">
+              <option value="">Select</option>
+              <option>1</option><option>2</option><option>3</option><option>4</option>
+            </select>
+            <p class="field-error" data-error-for="adults"></p>
+          </div>
+
+          <div class="form-group">
+            <label for="children">Children</label>
+            <select id="children">
+              <option value="0">0</option>
+              <option>1</option><option>2</option><option>3</option>
+            </select>
+            <p class="field-error" data-error-for="children"></p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="room">Select Room <span class="req">*</span></label>
+          <select id="room">
+            <option value="">Select</option>
+            <option value="STD-101">Standard • 101</option>
+            <option value="DLX-204">Deluxe • 204</option>
+            <option value="STE-310">Suite • 310</option>
+          </select>
+          <p class="hint">In production: filter by availability + occupancy rules.</p>
+          <p class="field-error" data-error-for="room"></p>
+        </div>
+
+        <div class="form-group">
+          <label for="dailyRate">Daily Rate <span class="req">*</span></label>
+          <select id="dailyRate">
+            <option value="">Select</option>
+            <option value="120">Standard Rate • $120</option>
+            <option value="150">Flex Rate • $150</option>
+            <option value="99">Promo Rate • $99</option>
+          </select>
+          <p class="field-error" data-error-for="dailyRate"></p>
+        </div>
+
+        <div class="row">
+          <div class="form-group">
+            <label for="deposit">Deposit</label>
+            <input id="deposit" type="number" min="0" step="0.01" placeholder="0.00" />
+            <p class="field-error" data-error-for="deposit"></p>
+          </div>
+
+          <div class="form-group">
+            <label for="discount">Discount</label>
+            <input id="discount" type="number" min="0" step="0.01" placeholder="0.00" />
+            <p class="field-error" data-error-for="discount"></p>
+          </div>
+        </div>
+
+        <div class="inline-metric">
+          <div class="metric-label">Nights</div>
+          <div class="metric-value" id="nightsValue">—</div>
+        </div>
+      </form>
+    </main>
+
+    <footer class="bottom-bar">
+      <button class="primary-btn" type="button" id="stayNextBtn">Next</button>
+    </footer>
+  </section>
+
+
+  <!-- =============== 5) BOOKING SUMMARY =============== -->
+  <section id="bookingSummary" class="screen" aria-label="Booking Summary">
+    <header class="topbar">
+      <button class="icon-btn" type="button" aria-label="Back" data-nav="stayDetails">←</button>
+      <h1 class="title center">Booking Summary</h1>
+      <button class="icon-btn" type="button" aria-label="Close" id="summaryCloseBtn">✕</button>
+    </header>
+
+    <main class="content">
+      <div class="card">
+        <h2 class="card-title">Booking Summary</h2>
+        <div class="summary-lines" id="summaryLines"></div>
+      </div>
+
+      <div class="card total-card">
+        <div class="muted">Total Amount</div>
+        <div class="total-amount" id="totalAmount">$0.00</div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Payment Method</h2>
+        <div class="grid-2">
+          <button class="secondary-btn" type="button" id="payCashBtn">Cash</button>
+          <button class="primary-btn" type="button" id="payCardBtn">Card</button>
+        </div>
+      </div>
+    </main>
+  </section>
+
+
+  <!-- =============== 6A) CARD PAYMENT DETAILS =============== -->
+  <section id="cardPayment" class="screen" aria-label="Card Payment Details">
+    <header class="topbar">
+      <button class="icon-btn" type="button" aria-label="Back" data-nav="bookingSummary">←</button>
+      <h1 class="title center">Card Payment</h1>
+      <button class="icon-btn" type="button" aria-label="Close" id="cardCloseBtn">✕</button>
+    </header>
+
+    <main class="content">
+      <div class="card total-card">
+        <div class="muted">Total Amount</div>
+        <div class="total-amount" id="cardTotalAmount">$0.00</div>
+      </div>
+
+      <div class="card">
+        <button class="primary-btn" type="button" id="tapToPayBtn">Tap to Pay</button>
+      </div>
+
+      <div class="divider"><span>or</span></div>
+
+      <div class="card">
+        <h2 class="card-title">Manual Card Entry</h2>
+
+        <form id="cardForm" novalidate>
+          <div class="form-group">
+            <label for="cardNumber">Card Number <span class="req">*</span></label>
+            <input id="cardNumber" inputmode="numeric" placeholder="1234 5678 9012 3456" />
+            <p class="field-error" data-error-for="cardNumber"></p>
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label for="expiry">Expiry <span class="req">*</span></label>
+              <input id="expiry" placeholder="MM/YY" />
+              <p class="field-error" data-error-for="expiry"></p>
+            </div>
+
+            <div class="form-group">
+              <label for="cvv">CVV <span class="req">*</span></label>
+              <input id="cvv" inputmode="numeric" placeholder="123" />
+              <p class="field-error" data-error-for="cvv"></p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="cardName">Name on Card <span class="req">*</span></label>
+            <input id="cardName" placeholder="John Doe" />
+            <p class="field-error" data-error-for="cardName"></p>
+          </div>
+
+          <div class="form-group">
+            <label for="cardZip">ZIP <span class="req">*</span></label>
+            <input id="cardZip" inputmode="numeric" placeholder="90210" />
+            <p class="field-error" data-error-for="cardZip"></p>
+          </div>
+        </form>
+
+        <button class="primary-btn" type="button" id="cardProceedBtn">Proceed to Pay</button>
+      </div>
+    </main>
+  </section>
+
+
+  <!-- =============== 6B) CASH PAYMENT CONFIRM =============== -->
+  <section id="cashConfirm" class="screen" aria-label="Cash Payment Confirm">
+    <header class="topbar">
+      <button class="icon-btn" type="button" aria-label="Back" data-nav="bookingSummary">←</button>
+      <h1 class="title center">Cash Payment</h1>
+      <button class="icon-btn" type="button" aria-label="Close" id="cashCloseBtn">✕</button>
+    </header>
+
+    <main class="content">
+      <div class="hero">
+        <div class="hero-title">Record Cash Payment</div>
+        <div class="hero-sub">Confirm cash received.</div>
+      </div>
+
+      <div class="card total-card">
+        <div class="muted">Total Amount</div>
+        <div class="total-amount" id="cashTotalAmount">$0.00</div>
+      </div>
+    </main>
+
+    <footer class="bottom-bar">
+      <button class="primary-btn" type="button" id="cashYesBtn">Yes</button>
+    </footer>
+  </section>
+
+
+  <!-- =============== 7) TAP TO PAY =============== -->
+  <section id="tapToPay" class="screen" aria-label="Tap to Pay">
+    <header class="topbar">
+      <button class="icon-btn" type="button" aria-label="Close" data-nav="cardPayment">✕</button>
+      <h1 class="title center">Tap to Pay</h1>
+      <div></div>
+    </header>
+
+    <main class="content">
+      <div class="nfc-indicator">
+        <div class="nfc-dot" aria-hidden="true"></div>
+        <div>
+          <div class="nfc-title">NFC Ready</div>
+          <div class="muted">Ask guest to tap card/phone.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Summary</h2>
+        <div class="summary-lines" id="nfcSummaryLines"></div>
+      </div>
+
+      <div class="card total-card">
+        <div class="muted">Total Amount</div>
+        <div class="total-amount" id="nfcTotalAmount">$0.00</div>
+      </div>
+
+      <button class="primary-btn" type="button" id="simulateNfcTapBtn">Simulate Tap</button>
+    </main>
+  </section>
+
+
+  <!-- =============== 8) PAYMENT PROCESSING =============== -->
+  <section id="paymentProcessing" class="screen" aria-label="Payment Processing">
+    <header class="topbar">
+      <h1 class="title">Payment Processing…</h1>
+      <div></div>
+    </header>
+
+    <main class="content center-stack">
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="muted">Do not close this screen.</p>
+    </main>
+  </section>
+
+
+  <!-- =============== 9A) CARD SUCCESS =============== -->
+  <section id="cardSuccess" class="screen" aria-label="Card Payment Successful">
+    <header class="topbar">
+      <h1 class="title">Payment Successful</h1>
+      <div></div>
+    </header>
+
+    <main class="content">
+      <div class="status status-success">
+        <div class="status-title">Success</div>
+        <div class="status-sub">Card payment completed.</div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Transaction Details</h2>
+        <div class="summary-lines" id="cardSuccessDetails"></div>
+      </div>
+
+      <button class="primary-btn" type="button" id="printReceiptFromCardBtn">Print Receipt</button>
+    </main>
+  </section>
+
+
+  <!-- =============== 9B) CASH SUCCESS =============== -->
+  <section id="cashSuccess" class="screen" aria-label="Cash Payment Successful">
+    <header class="topbar">
+      <h1 class="title">Payment Successful</h1>
+      <div></div>
+    </header>
+
+    <main class="content">
+      <div class="status status-success">
+        <div class="status-title">Success</div>
+        <div class="status-sub">Cash payment recorded.</div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Transaction Details</h2>
+        <div class="summary-lines" id="cashSuccessDetails"></div>
+      </div>
+
+      <button class="primary-btn" type="button" id="printReceiptFromCashBtn">Print Receipt</button>
+    </main>
+  </section>
+
+
+  <!-- =============== 9C) CARD DECLINED =============== -->
+  <section id="cardDeclined" class="screen" aria-label="Card Payment Declined">
+    <header class="topbar">
+      <h1 class="title">Payment Declined</h1>
+      <div></div>
+    </header>
+
+    <main class="content">
+      <div class="status status-declined">
+        <div class="status-title">Declined</div>
+        <div class="status-sub">Card was declined. Choose another method.</div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Details</h2>
+        <div class="summary-lines" id="declinedDetails"></div>
+      </div>
+
+      <div class="grid-2">
+        <button class="secondary-btn" type="button" disabled aria-disabled="true">Retry (disabled)</button>
+        <button class="primary-btn" type="button" data-nav="bookingSummary">Change Method</button>
+      </div>
+    </main>
+  </section>
+
+
+  <!-- =============== 10) RECEIPT PRINTED =============== -->
+  <section id="receiptPrinted" class="screen" aria-label="Receipt Printed">
+    <header class="topbar">
+      <h1 class="title">Receipt Printed</h1>
+      <div></div>
+    </header>
+
+    <main class="content center-stack">
+      <div class="big-check" aria-hidden="true">✓</div>
+      <p class="muted">Receipt has been printed successfully.</p>
+
+      <div class="grid-2">
+        <button class="secondary-btn" type="button" id="shareBtn">Share</button>
+        <button class="primary-btn" type="button" id="doneBtn">Done</button>
+      </div>
+    </main>
+  </section>
+
+
+  <!-- =============== SNACKBAR (11/12/13) =============== -->
+  <div id="snackbar" class="snackbar" role="status" aria-live="polite" aria-atomic="true">
+    <span id="snackbarMsg"></span>
+    <button class="snackbar-close" type="button" aria-label="Dismiss" id="snackbarCloseBtn">✕</button>
+  </div>
+
+  <canvas id="scannerCanvas" class="hidden" aria-hidden="true"></canvas>
+
+  <script src="app.js"></script>
+</body>
+</html>
