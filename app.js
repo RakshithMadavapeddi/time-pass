@@ -1,1130 +1,1073 @@
-/* =========================
-   App State
-========================= */
-const state = {
-  guest: {
-    guestId: null,
-    fullName: "",
-    street: "",
-    city: "",
-    state: "",
-    zip: "",
-    gender: "",
-    dob: "",     // store DOB even if UI only shows age
-    age: "",
-    idType: "",
-    idNumber: "",
-    rawScan: ""
-  },
-  stay: {
-    checkIn: "",
-    checkOut: "",
-    adults: "",
-    children: "0",
-    room: "",
-    dailyRate: "",
-    deposit: "0",
-    discount: "0",
-    nights: 0
-  },
-  booking: {
-    bookingId: "",
-    total: 0
-  },
-  payment: {
-    method: "",
-    transactionId: "",
-    transactionType: ""
-  }
-};
+/**
+ * Single-page flow runner for the provided static HTML screens.
+ * - Does NOT change the UI markup/styles; it mounts each provided screen as-is.
+ * - Handles navigation + state, and fills placeholder values.
+ */
 
-/* =========================
-   Helpers
-========================= */
-function $(sel){ return document.querySelector(sel); }
-function $all(sel){ return Array.from(document.querySelectorAll(sel)); }
+(() => {
+  const root = document.getElementById("appRoot");
+  if (!root) return;
 
-function navigate(screenId){
-  $all(".screen").forEach(s => s.classList.remove("active"));
-  const el = document.getElementById(screenId);
-  if (el) el.classList.add("active");
-  window.scrollTo(0,0);
-}
+  const T = (name) => document.getElementById(`tpl-${name}`);
+  const clone = (name) => {
+    const tpl = T(name);
+    if (!tpl) throw new Error(`Missing template: ${name}`);
+    return tpl.content.cloneNode(true);
+  };
 
-function showSnackbar(message){
-  $("#snackbarMsg").textContent = message;
-  $("#snackbar").classList.add("show");
-}
-function hideSnackbar(){
-  $("#snackbar").classList.remove("show");
-}
+  // ---------------------------
+  // App state
+  // ---------------------------
+  const state = {
+    guest: {
+      fullName: "",
+      streetAddress: "",
+      city: "",
+      state: "",
+      zip: "",
+      gender: "",
+      age: "",
+      idType: "",
+      idNumber: "",
+    },
+    stay: {
+      checkin: "",
+      checkout: "",
+      adults: "",
+      children: "",
+      room: "",
+      rateKey: "",
+      deposit: "",
+      discount: "",
+    },
+    payment: {
+      method: "",
+      bookingId: "",
+      last4: "",
+    },
+    computed: {
+      nights: 0,
+      rate: 0,
+      total: 0,
+    },
+  };
 
-function setFieldError(fieldId, msg){
-  const input = document.getElementById(fieldId);
-  const err = document.querySelector(`[data-error-for="${fieldId}"]`);
-  if (input) input.classList.toggle("input-error", Boolean(msg));
-  if (err) err.textContent = msg || "";
-}
+  const KNOWN_GUEST_IDS = new Set([
+    "1234567890",
+    "5555555555",
+    "9876543210",
+    "0000000000",
+  ]);
 
-function clearErrors(formRoot){
-  formRoot.querySelectorAll(".input-error").forEach(el => el.classList.remove("input-error"));
-  formRoot.querySelectorAll(".field-error").forEach(el => el.textContent = "");
-}
+  const RATE_MAP = {
+    "king-75": { label: "King Size - $75", amount: 75 },
+    "queen-65": { label: "Queen Size - $65", amount: 65 },
+    "double-85": { label: "Double Bed - $85", amount: 85 },
+    "studio-75": { label: "Studio - $75", amount: 75 },
+    "studio-weekly-50": { label: "Studio Weekly - $50", amount: 50 },
+  };
 
-function onlyDigits(str){ return (str || "").replace(/\D/g, ""); }
+  // ---------------------------
+  // Utilities
+  // ---------------------------
+  const $$ = (sel, scope = document) => Array.from(scope.querySelectorAll(sel));
+  const $ = (sel, scope = document) => scope.querySelector(sel);
 
-function calcAgeFromDOB(dobYYYYMMDD){
-  if (!dobYYYYMMDD || dobYYYYMMDD.length < 8) return "";
-  const y = Number(dobYYYYMMDD.slice(0,4));
-  const m = Number(dobYYYYMMDD.slice(4,6));
-  const d = Number(dobYYYYMMDD.slice(6,8));
-  if (!y || !m || !d) return "";
-
-  const today = new Date();
-  const dob = new Date(y, m - 1, d);
-  let age = today.getFullYear() - dob.getFullYear();
-  const monthDiff = today.getMonth() - dob.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) age--;
-  return String(Math.max(0, age));
-}
-
-function nightsBetween(checkInISO, checkOutISO){
-  if (!checkInISO || !checkOutISO) return 0;
-  const a = new Date(checkInISO);
-  const b = new Date(checkOutISO);
-  const diff = b - a;
-  const nights = Math.round(diff / (1000*60*60*24));
-  return Number.isFinite(nights) ? nights : 0;
-}
-
-function formatMoney(n){
-  const v = Number(n || 0);
-  return v.toLocaleString(undefined, { style: "currency", currency: "USD" });
-}
-
-/* =========================
-   US States Dropdown
-========================= */
-const US_STATES = [
-  ["AL","Alabama"],["AK","Alaska"],["AZ","Arizona"],["AR","Arkansas"],["CA","California"],
-  ["CO","Colorado"],["CT","Connecticut"],["DE","Delaware"],["FL","Florida"],["GA","Georgia"],
-  ["HI","Hawaii"],["ID","Idaho"],["IL","Illinois"],["IN","Indiana"],["IA","Iowa"],
-  ["KS","Kansas"],["KY","Kentucky"],["LA","Louisiana"],["ME","Maine"],["MD","Maryland"],
-  ["MA","Massachusetts"],["MI","Michigan"],["MN","Minnesota"],["MS","Mississippi"],["MO","Missouri"],
-  ["MT","Montana"],["NE","Nebraska"],["NV","Nevada"],["NH","New Hampshire"],["NJ","New Jersey"],
-  ["NM","New Mexico"],["NY","New York"],["NC","North Carolina"],["ND","North Dakota"],["OH","Ohio"],
-  ["OK","Oklahoma"],["OR","Oregon"],["PA","Pennsylvania"],["RI","Rhode Island"],["SC","South Carolina"],
-  ["SD","South Dakota"],["TN","Tennessee"],["TX","Texas"],["UT","Utah"],["VT","Vermont"],
-  ["VA","Virginia"],["WA","Washington"],["WV","West Virginia"],["WI","Wisconsin"],["WY","Wyoming"],
-  ["DC","District of Columbia"]
-];
-
-function initStateDropdown(){
-  const sel = $("#state");
-  US_STATES.forEach(([abbr, name]) => {
-    const opt = document.createElement("option");
-    opt.value = abbr;
-    opt.textContent = name;
-    sel.appendChild(opt);
-  });
-}
-
-/* =========================
-   AAMVA Parsing (practical implementation)
-========================= */
-function parseAamva(raw){
-  if (!raw || raw.trim().length < 10) return { ok:false, reason:"empty" };
-
-  const text = raw.replace(/\r/g, "");
-  const fields = {};
-  const known = ["DAC","DAD","DCS","DAG","DAI","DAJ","DAK","DBC","DBB","DAQ"];
-
-  known.forEach(code => {
-    const m = text.match(new RegExp(`${code}([^\\n\\r]*)`));
-    if (m && m[1] != null) fields[code] = m[1].trim();
-  });
-
-  if (!fields.DAC && !fields.DCS && !fields.DAQ) {
-    return { ok:false, reason:"missing_critical" };
+  function money(n) {
+    const x = Number.isFinite(n) ? n : 0;
+    return `$ ${x.toFixed(2)}`;
   }
 
-  return { ok:true, fields, raw:text };
-}
-
-/* =========================
-   Mapping Rules (per spec)
-========================= */
-function applyScanToRegistration(parsed){
-  const { fields, raw } = parsed;
-
-  const first = (fields.DAC || "").trim();
-  const middle = (fields.DAD || "").trim();
-  const last = (fields.DCS || "").trim();
-  const fullName = [first, middle, last].filter(Boolean).join(" ").trim();
-
-  const street = (fields.DAG || "").trim();
-  const city = (fields.DAI || "").trim();
-
-  const scannedState = (fields.DAJ || "").trim().toUpperCase();
-  const stateMatches = US_STATES.some(([abbr]) => abbr === scannedState);
-
-  const zipRaw = (fields.DAK || "").trim();
-  const zip5 = onlyDigits(zipRaw).slice(0,5);
-
-  const genderRaw = (fields.DBC || "").trim().toUpperCase();
-  let gender = "";
-  if (genderRaw === "1" || genderRaw === "M" || genderRaw === "MALE") gender = "Male";
-  else if (genderRaw === "2" || genderRaw === "F" || genderRaw === "FEMALE") gender = "Female";
-  else if (genderRaw === "9" || genderRaw === "U" || genderRaw === "UNKNOWN" || genderRaw) gender = "Other";
-
-  const dob = (fields.DBB || "").trim();
-  const age = calcAgeFromDOB(dob);
-
-  const idNumber = (fields.DAQ || "").trim();
-
-  state.guest.rawScan = raw;
-  state.guest.fullName = fullName || state.guest.fullName;
-  state.guest.street = street || state.guest.street;
-  state.guest.city = city || state.guest.city;
-  state.guest.zip = zip5 || state.guest.zip;
-  state.guest.gender = gender || state.guest.gender;
-  state.guest.dob = dob || state.guest.dob;
-  state.guest.age = age || state.guest.age;
-  state.guest.idNumber = idNumber || state.guest.idNumber;
-
-  $("#fullName").value = state.guest.fullName;
-  $("#street").value = state.guest.street;
-  $("#city").value = state.guest.city;
-  $("#zip").value = state.guest.zip;
-  $("#gender").value = state.guest.gender || "";
-  $("#age").value = state.guest.age || "";
-  $("#idNumber").value = state.guest.idNumber || "";
-  $("#dob").value = state.guest.dob || "";
-  $("#rawScan").value = state.guest.rawScan || "";
-
-  if (stateMatches) {
-    $("#state").value = scannedState;
-    setFieldError("state", "");
-  } else if (scannedState) {
-    $("#state").value = "";
-    setFieldError("state", "Scanned state not recognized. Please select manually.");
+  function parseMoneyLike(v) {
+    if (v == null) return 0;
+    const num = String(v).replace(/[^0-9.\-]/g, "");
+    const f = parseFloat(num);
+    return Number.isFinite(f) ? f : 0;
   }
 
-  if (zipRaw && zip5.length !== 5) {
-    setFieldError("zip", "Invalid ZIP from scan. Please enter 5 digits.");
-  }
-}
-
-/* =========================
-   Returning vs New Guest (demo)
-========================= */
-function decideReturningGuest(){
-  const id = (state.guest.idNumber || "").trim();
-  if (!id) return "new";
-  const digits = onlyDigits(id);
-  const last = digits ? Number(digits[digits.length - 1]) : NaN;
-  return Number.isFinite(last) && last % 2 === 0 ? "returning" : "new";
-}
-
-/* =========================
-   Booking total computation
-========================= */
-function computeTotal(){
-  const nights = state.stay.nights || 0;
-  const rate = Number(state.stay.dailyRate || 0);
-  const deposit = Number(state.stay.deposit || 0);
-  const discount = Number(state.stay.discount || 0);
-  const total = Math.max(0, (nights * rate) + deposit - discount);
-  state.booking.total = total;
-  return total;
-}
-
-/* =========================
-   Summary rendering
-========================= */
-(function injectSummaryRowStyle(){
-  const css = `
-    .summary-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #eee;}
-    .summary-row:last-child{border-bottom:none;}
-  `;
-  const style = document.createElement("style");
-  style.textContent = css;
-  document.head.appendChild(style);
-})();
-
-function renderBookingSummary(){
-  const lines = [
-    ["Guest", state.guest.fullName || "—"],
-    ["ID", `${state.guest.idType || "—"} • ${state.guest.idNumber || "—"}`],
-    ["Check-in", state.stay.checkIn || "—"],
-    ["Check-out", state.stay.checkOut || "—"],
-    ["Nights", String(state.stay.nights || 0)],
-    ["Room", state.stay.room || "—"],
-    ["Guests", `${state.stay.adults || "—"} adults, ${state.stay.children || "0"} children`],
-    ["Daily rate", formatMoney(state.stay.dailyRate)],
-    ["Deposit", formatMoney(state.stay.deposit)],
-    ["Discount", formatMoney(state.stay.discount)]
-  ];
-
-  const container = $("#summaryLines");
-  container.innerHTML = "";
-  lines.forEach(([k,v]) => {
-    const row = document.createElement("div");
-    row.className = "summary-row";
-    row.innerHTML = `<div class="muted">${k}</div><div><b>${v}</b></div>`;
-    container.appendChild(row);
-  });
-
-  const total = computeTotal();
-  $("#totalAmount").textContent = formatMoney(total);
-  $("#cardTotalAmount").textContent = formatMoney(total);
-  $("#cashTotalAmount").textContent = formatMoney(total);
-  $("#nfcTotalAmount").textContent = formatMoney(total);
-}
-
-function renderNfcSummary(){
-  const container = $("#nfcSummaryLines");
-  container.innerHTML = "";
-  const lines = [
-    ["Guest", state.guest.fullName || "—"],
-    ["Room", state.stay.room || "—"]
-  ];
-  lines.forEach(([k,v]) => {
-    const row = document.createElement("div");
-    row.className = "summary-row";
-    row.innerHTML = `<div class="muted">${k}</div><div><b>${v}</b></div>`;
-    container.appendChild(row);
-  });
-}
-
-function renderTransactionDetails(targetId, method){
-  const bookingId = state.booking.bookingId || "BK-" + Math.random().toString(16).slice(2,8).toUpperCase();
-  state.booking.bookingId = bookingId;
-
-  const txnId = state.payment.transactionId || "TX-" + Math.random().toString(16).slice(2,10).toUpperCase();
-  state.payment.transactionId = txnId;
-
-  const txnType = method === "cash" ? "Cash" : (state.payment.transactionType || "NFC");
-  const total = formatMoney(state.booking.total);
-
-  const lines = [
-    ["Booking ID", bookingId],
-    ["Transaction Type", txnType],
-    ["Transaction ID", txnId],
-    ["Total Amount", total]
-  ];
-
-  const container = document.getElementById(targetId);
-  container.innerHTML = "";
-  lines.forEach(([k,v]) => {
-    const row = document.createElement("div");
-    row.className = "summary-row";
-    row.innerHTML = `<div class="muted">${k}</div><div><b>${v}</b></div>`;
-    container.appendChild(row);
-  });
-}
-
-/* =========================
-   Validation
-========================= */
-function validateRegistration(){
-  const form = $("#registrationForm");
-  clearErrors(form);
-
-  state.guest.fullName = $("#fullName").value.trim();
-  state.guest.street = $("#street").value.trim();
-  state.guest.city = $("#city").value.trim();
-  state.guest.state = $("#state").value.trim();
-  state.guest.zip = $("#zip").value.trim();
-  state.guest.gender = $("#gender").value.trim();
-  state.guest.age = $("#age").value.trim();
-  state.guest.idType = $("#idType").value.trim();
-  state.guest.idNumber = $("#idNumber").value.trim();
-  state.guest.dob = $("#dob").value.trim();
-  state.guest.rawScan = $("#rawScan").value.trim();
-
-  let ok = true;
-
-  if (!state.guest.fullName){ setFieldError("fullName","Full name is required."); ok=false; }
-  if (!state.guest.street){ setFieldError("street","Street address is required."); ok=false; }
-  if (!state.guest.city){ setFieldError("city","City is required."); ok=false; }
-  if (!state.guest.state){ setFieldError("state","State is required."); ok=false; }
-
-  const zipDigits = onlyDigits(state.guest.zip);
-  if (zipDigits.length !== 5){ setFieldError("zip","ZIP must be 5 digits."); ok=false; }
-
-  if (!state.guest.gender){ setFieldError("gender","Gender is required."); ok=false; }
-
-  const ageNum = Number(state.guest.age);
-  if (!state.guest.age || !Number.isFinite(ageNum) || ageNum < 0){
-    setFieldError("age","Age must be a valid number.");
-    ok=false;
+  function toISODate(d) {
+    return d.toISOString().slice(0, 10);
   }
 
-  if (!state.guest.idNumber){ setFieldError("idNumber","Identification number is required."); ok=false; }
-
-  if (!state.guest.idType){
-    setFieldError("idType","Please select DL or ID.");
-    ok=false;
+  function computeNights(checkinISO, checkoutISO) {
+    if (!checkinISO || !checkoutISO) return 0;
+    // Hotel day: 2pm -> 11am next day; with date-only inputs we treat this as "nights".
+    // If checkout <= checkin, treat as 1 night.
+    const inD = new Date(`${checkinISO}T14:00:00`);
+    const outD = new Date(`${checkoutISO}T11:00:00`);
+    const diffMs = outD - inD;
+    const nights = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+    return Math.max(1, Number.isFinite(nights) ? nights : 0);
   }
 
-  return ok;
-}
+  function computeDerived() {
+    const nights = computeNights(state.stay.checkin, state.stay.checkout);
+    const rate = RATE_MAP[state.stay.rateKey]?.amount ?? 0;
+    const deposit = parseMoneyLike(state.stay.deposit);
+    const discount = parseMoneyLike(state.stay.discount);
+    const total = nights * rate + deposit - discount;
 
-function validateStayDetails(){
-  const form = $("#stayForm");
-  clearErrors(form);
-
-  state.stay.checkIn = $("#checkIn").value;
-  state.stay.checkOut = $("#checkOut").value;
-  state.stay.adults = $("#adults").value;
-  state.stay.children = $("#children").value;
-  state.stay.room = $("#room").value;
-  state.stay.dailyRate = $("#dailyRate").value;
-  state.stay.deposit = $("#deposit").value || "0";
-  state.stay.discount = $("#discount").value || "0";
-
-  let ok = true;
-
-  if (!state.stay.checkIn){ setFieldError("checkIn","Check-in is required."); ok=false; }
-  if (!state.stay.checkOut){ setFieldError("checkOut","Check-out is required."); ok=false; }
-
-  if (state.stay.checkIn && state.stay.checkOut){
-    const nights = nightsBetween(state.stay.checkIn, state.stay.checkOut);
-    if (nights <= 0){
-      setFieldError("checkOut","Check-out must be after check-in.");
-      ok=false;
-    } else {
-      state.stay.nights = nights;
-      $("#nightsValue").textContent = String(nights);
-    }
-  } else {
-    $("#nightsValue").textContent = "—";
+    state.computed.nights = nights;
+    state.computed.rate = rate;
+    state.computed.total = total;
   }
 
-  if (!state.stay.adults){ setFieldError("adults","Adults is required."); ok=false; }
-  if (!state.stay.room){ setFieldError("room","Room is required."); ok=false; }
-  if (!state.stay.dailyRate){ setFieldError("dailyRate","Daily rate is required."); ok=false; }
-
-  const dep = Number(state.stay.deposit);
-  if (!Number.isFinite(dep) || dep < 0){ setFieldError("deposit","Deposit must be >= 0."); ok=false; }
-
-  const disc = Number(state.stay.discount);
-  if (!Number.isFinite(disc) || disc < 0){ setFieldError("discount","Discount must be >= 0."); ok=false; }
-
-  return ok;
-}
-
-function validateManualCard(){
-  const form = $("#cardForm");
-  clearErrors(form);
-
-  const cardNumber = onlyDigits($("#cardNumber").value);
-  const expiry = $("#expiry").value.trim();
-  const cvv = onlyDigits($("#cvv").value);
-  const name = $("#cardName").value.trim();
-  const zip = onlyDigits($("#cardZip").value);
-
-  let ok = true;
-
-  if (cardNumber.length < 12){ setFieldError("cardNumber","Enter a valid card number."); ok=false; }
-  if (!/^\d{2}\/\d{2}$/.test(expiry)){ setFieldError("expiry","Use MM/YY."); ok=false; }
-  if (cvv.length < 3){ setFieldError("cvv","CVV is required."); ok=false; }
-  if (!name){ setFieldError("cardName","Name is required."); ok=false; }
-  if (zip.length !== 5){ setFieldError("cardZip","ZIP must be 5 digits."); ok=false; }
-
-  return ok;
-}
-
-/* =========================
-   Confirm discard
-========================= */
-function confirmDiscard(){
-  return window.confirm("Discard check-in?");
-}
-
-/* =========================
-   REAL PDF417 Scanner (BarcodeDetector + ZXing fallback)
-========================= */
-const Pdf417Scanner = (() => {
-  let stream = null;
-  let devices = [];
-  let currentDeviceId = null;
-  let running = false;
-  let paused = false;
-  let torchOn = false;
-  let stopLoop = false;
-  let loopTimer = null;
-
-  let detector = null;
-  let zxing = null;
-  let zxingReader = null;
-  let decodeHints = null;
-
-  let lastText = "";
-  let lastAt = 0;
-
-  const SCAN_INTERVAL_MS = 110;
-
-  function setStatus(msg){
-    const el = document.getElementById("scannerStatus");
-    if (el) el.textContent = msg;
-  }
-
-  function setEngine(name, kind = ""){
-    const el = document.getElementById("enginePill");
-    if (!el) return;
-    el.textContent = `Engine: ${name}`;
-    el.className = `pill ${kind}`.trim();
-  }
-
-  function setCameraState(name, kind = ""){
-    const el = document.getElementById("cameraPill");
-    if (!el) return;
-    el.textContent = `Camera: ${name}`;
-    el.className = `pill ${kind}`.trim();
-  }
-
-  function syncButtons(){
-    const startBtn = document.getElementById("startScannerBtn");
-    const stopBtn = document.getElementById("stopScannerBtn");
-    const pauseBtn = document.getElementById("pauseResumeBtn");
-
-    if (startBtn) startBtn.disabled = running;
-    if (stopBtn) stopBtn.disabled = !running;
-    if (pauseBtn) {
-      pauseBtn.disabled = !running;
-      pauseBtn.textContent = paused ? "Resume" : "Pause";
-    }
-  }
-
-  function getVideo(){
-    return document.getElementById("scannerVideo");
-  }
-
-  function getCanvasCtx(){
-    const canvas = document.getElementById("scannerCanvas");
-    if (!canvas) return null;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    return { canvas, ctx };
-  }
-
-  function getGuideRect(){
-    const guide = document.getElementById("scanGuide");
-    return guide ? guide.getBoundingClientRect() : null;
-  }
-
-  function pointsToViewportRect(points, videoEl){
-    const vr = videoEl.getBoundingClientRect();
-    if (!points || points.length === 0) return null;
-
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-
-    for (const p of points) {
-      if (!p) continue;
-      minX = Math.min(minX, p.x);
-      minY = Math.min(minY, p.y);
-      maxX = Math.max(maxX, p.x);
-      maxY = Math.max(maxY, p.y);
-    }
-
-    return {
-      left: vr.left + minX,
-      top: vr.top + minY,
-      right: vr.left + maxX,
-      bottom: vr.top + maxY
-    };
-  }
-
-  function isRectInsideGuide(box, guide){
-    if (!box || !guide) return false;
-    return (
-      box.left >= guide.left &&
-      box.top >= guide.top &&
-      box.right <= guide.right &&
-      box.bottom <= guide.bottom
+  function ensureBookingId() {
+    if (state.payment.bookingId) return;
+    // 10 digits
+    state.payment.bookingId = String(
+      Math.floor(1000000000 + Math.random() * 9000000000)
     );
   }
 
-  async function initEngine(){
-    if (detector || zxingReader) return;
+  function setRowValueByLeftText(container, leftText, rightText) {
+    const rows = $$(".row", container);
+    for (const row of rows) {
+      const left = $(".left", row);
+      const right = $(".right", row);
+      if (!left || !right) continue;
+      if (left.textContent.trim() === leftText) {
+        right.textContent = rightText;
+        return true;
+      }
+    }
+    return false;
+  }
 
-    if ("BarcodeDetector" in window) {
+  function setAllRowValues(container, mapping) {
+    for (const [k, v] of Object.entries(mapping)) {
+      setRowValueByLeftText(container, k, v);
+    }
+  }
+
+  function mount(screenName) {
+    root.innerHTML = "";
+    root.appendChild(clone(screenName));
+    initScreen(screenName);
+  }
+
+  // ---------------------------
+  // Screen initializers
+  // ---------------------------
+  function initScreen(name) {
+    switch (name) {
+      case "dashboard":
+        return initDashboard();
+      case "registration":
+        return initRegistration();
+      case "returning":
+        return initReturningGuest();
+      case "new":
+        return initNewGuest();
+      case "stay":
+        return initStayDetails();
+      case "summary":
+        return initBookingSummary();
+      case "cash":
+        return initCashPayment();
+      case "cashSuccess":
+        return initCashPaymentSuccessful();
+      case "card":
+        return initCardPayment();
+      case "tap":
+        return initTapToPay();
+      case "processing":
+        return initCardProcessing();
+      case "cardSuccess":
+        return initCardPaymentSuccessful();
+      case "cardDeclined":
+        return initCardPaymentDeclined();
+      case "receipt":
+        return initReceiptPrinted();
+      default:
+        break;
+    }
+  }
+
+  // Dashboard
+  function initDashboard() {
+    const checkInCard = $('[aria-label="Check-In"]');
+    if (checkInCard) {
+      const go = () => mount("registration");
+      checkInCard.addEventListener("click", go);
+      checkInCard.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") go();
+      });
+    }
+  }
+
+  // Registration + scanner (script copied 1:1 except wrapped)
+  function initRegistration() {
+    // Prefill if returning from back.
+    const form = document.getElementById("guestForm");
+    if (form) {
+      const map = {
+        fullName: state.guest.fullName,
+        streetAddress: state.guest.streetAddress,
+        city: state.guest.city,
+        state: state.guest.state,
+        zip: state.guest.zip,
+        gender: state.guest.gender,
+        age: state.guest.age,
+        idType: state.guest.idType,
+        idNumber: state.guest.idNumber,
+      };
+      for (const [id, val] of Object.entries(map)) {
+        const el = document.getElementById(id);
+        if (el && val) el.value = val;
+      }
+    }
+
+    // Next button
+    const nextBtn = $(".primary-btn");
+    if (nextBtn) {
+      nextBtn.addEventListener("click", () => {
+        const f = document.getElementById("guestForm");
+        if (f && !f.reportValidity()) return;
+
+        // Capture
+        state.guest.fullName =
+          document.getElementById("fullName")?.value?.trim() || "";
+        state.guest.streetAddress =
+          document.getElementById("streetAddress")?.value?.trim() || "";
+        state.guest.city = document.getElementById("city")?.value?.trim() || "";
+        state.guest.state = document.getElementById("state")?.value || "";
+        state.guest.zip = document.getElementById("zip")?.value?.trim() || "";
+        state.guest.gender = document.getElementById("gender")?.value || "";
+        state.guest.age = document.getElementById("age")?.value?.trim() || "";
+        state.guest.idType = document.getElementById("idType")?.value || "";
+        state.guest.idNumber =
+          document.getElementById("idNumber")?.value?.trim() || "";
+
+        // Determine returning vs new
+        const id = state.guest.idNumber;
+        const lastDigit = (id.match(/(\d)\s*$/) || [])[1];
+        const isReturning =
+          (id && KNOWN_GUEST_IDS.has(id)) ||
+          (lastDigit != null && parseInt(lastDigit, 10) % 2 === 0);
+
+        mount(isReturning ? "returning" : "new");
+      });
+    }
+
+    initScannerModule(); // scanner behavior on this screen
+  }
+
+  function initScannerModule() {
+    // Original script from refinedGuestRegistration.html, adapted only to be re-entrant.
+    // If elements don't exist (e.g., user navigated away), it bails.
+    const $id = (id) => document.getElementById(id);
+
+    const scannerScreen = $id("scannerScreen");
+    const registrationScreen = $id("registrationScreen"); // eslint-disable-line no-unused-vars
+
+    const openScannerBtn = $id("openScannerBtn");
+    const closeBtn = $id("closeBtn");
+    const flashBtn = $id("flashBtn");
+    const video = $id("camera");
+
+    if (!scannerScreen || !openScannerBtn || !closeBtn || !flashBtn || !video)
+      return;
+
+    // Form fields
+    const fullNameEl = $id("fullName");
+    const streetEl = $id("streetAddress");
+    const cityEl = $id("city");
+    const stateEl = $id("state");
+    const zipEl = $id("zip");
+    const genderEl = $id("gender");
+    const ageEl = $id("age");
+    const idTypeEl = $id("idType");
+    const idNumEl = $id("idNumber");
+
+    // Scanner state
+    let stream = null;
+    let track = null;
+    let torchOn = false;
+
+    // Engine state
+    let detector = null;
+    let zxing = null;
+    let zxingReader = null;
+
+    let stopLoop = true;
+    let lastText = "";
+    let lastAt = 0;
+
+    const FPS_MS = 120;
+    const DUP_MS = 1600;
+    const ROI_W = 0.9;
+    const ROI_H = 0.55;
+
+    const canvas = $id("scanCanvas");
+    const ctx = canvas?.getContext?.("2d", { willReadFrequently: true });
+
+    function openScanner() {
+      scannerScreen.classList.add("is-open");
+      startCameraAndScan();
+    }
+
+    function closeScanner() {
+      stopCamera();
+      scannerScreen.classList.remove("is-open");
+    }
+
+    openScannerBtn.addEventListener("click", openScanner);
+    closeBtn.addEventListener("click", closeScanner);
+
+    flashBtn.addEventListener("click", async () => {
+      if (!track) return;
+
       try {
-        const formats = await window.BarcodeDetector.getSupportedFormats?.();
-        const supportsPdf417 = Array.isArray(formats) && formats.includes("pdf417");
-        if (supportsPdf417) {
-          detector = new window.BarcodeDetector({ formats: ["pdf417"] });
-          setEngine("BarcodeDetector", "ok");
+        const capabilities = track.getCapabilities?.() || {};
+        if (!capabilities.torch) {
+          alert("Flash not supported on this device.");
           return;
         }
-        setEngine("BarcodeDetector(no pdf417) → ZXing", "warn");
-      } catch {
-        setEngine("BarcodeDetector error → ZXing", "warn");
+
+        torchOn = !torchOn;
+
+        await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+
+        flashBtn.classList.toggle("flash-active", torchOn);
+        flashBtn.setAttribute("aria-pressed", String(torchOn));
+      } catch (err) {
+        console.error("Torch error:", err);
+        alert("Unable to toggle flash on this device.");
       }
-    } else {
-      setEngine("ZXing fallback", "warn");
+    });
+
+    async function initEngineIfNeeded() {
+      if (detector || zxingReader) return;
+
+      if ("BarcodeDetector" in window) {
+        try {
+          const formats = await window.BarcodeDetector.getSupportedFormats?.();
+          const supportsPdf417 =
+            Array.isArray(formats) && formats.includes("pdf417");
+          if (supportsPdf417) {
+            detector = new BarcodeDetector({ formats: ["pdf417"] });
+            return;
+          }
+        } catch {
+          // fall through to ZXing
+        }
+      }
+
+      zxing = await import(
+        "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/+esm"
+      );
+      zxingReader = new zxing.BrowserMultiFormatReader();
+
+      const hints = new Map();
+      hints.set(zxing.DecodeHintType.POSSIBLE_FORMATS, [
+        zxing.BarcodeFormat.PDF_417,
+      ]);
+      zxingReader.hints = hints;
     }
 
-    zxing = await import("https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/+esm");
-    zxingReader = new zxing.MultiFormatReader();
-    decodeHints = new Map();
-    decodeHints.set(zxing.DecodeHintType.POSSIBLE_FORMATS, [zxing.BarcodeFormat.PDF_417]);
-    decodeHints.set(zxing.DecodeHintType.TRY_HARDER, true);
-    zxingReader.setHints(decodeHints);
-    setEngine("ZXing (@zxing/library)", "ok");
-  }
-
-  async function refreshCameras(){
-    if (!navigator.mediaDevices?.enumerateDevices) return;
-    const all = await navigator.mediaDevices.enumerateDevices();
-    devices = all.filter(d => d.kind === "videoinput");
-    if (!devices.length) {
-      currentDeviceId = null;
-      return;
-    }
-    const preferred = devices.find(d => /back|rear|environment/i.test(d.label));
-    currentDeviceId = currentDeviceId || preferred?.deviceId || devices[0].deviceId;
-  }
-
-  async function start(deviceId = null){
-    const videoEl = getVideo();
-    if (!videoEl) return;
-
-    await stop();
-    setStatus("Requesting camera…");
-
-    try {
-      await initEngine();
-
-      const constraints = {
+    async function startCamera() {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
         audio: false,
-        video: deviceId
-          ? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
-          : { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }
-      };
+      });
 
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
-      videoEl.srcObject = stream;
-      await videoEl.play();
+      video.srcObject = stream;
+      await video.play();
 
-      const track = stream.getVideoTracks?.()[0];
-      const settings = track?.getSettings?.() || {};
-      if (settings.deviceId) currentDeviceId = settings.deviceId;
+      track = stream.getVideoTracks?.()?.[0] || null;
+    }
 
-      await refreshCameras();
-
-      running = true;
-      paused = false;
+    function stopCamera() {
+      stopLoop = true;
       torchOn = false;
+
+      try {
+        video.pause();
+      } catch {}
+      try {
+        video.srcObject = null;
+      } catch {}
+
+      if (stream) {
+        stream.getTracks().forEach((t) => t.stop());
+        stream = null;
+      }
+      track = null;
+
+      flashBtn.classList.remove("flash-active");
+      flashBtn.setAttribute("aria-pressed", "false");
+    }
+
+    async function startCameraAndScan() {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        alert("This browser doesn’t support camera access.");
+        closeScanner();
+        return;
+      }
+
       stopLoop = false;
 
-      setCameraState("running", "ok");
-      syncButtons();
-      updateTorchAvailability();
-      setStatus("Scanning for PDF417…");
-
-      scanLoop();
-    } catch (e) {
-      console.error(e);
-      setCameraState("blocked", "warn");
-      syncButtons();
-      setStatus("Camera unavailable or permission denied.");
-      showSnackbar("Auto-fill failed. Please enter details manually.");
-      navigate("guestRegistration");
-    }
-  }
-
-  async function stop(){
-    stopLoop = true;
-    running = false;
-    paused = false;
-    torchOn = false;
-
-    if (loopTimer) {
-      clearTimeout(loopTimer);
-      loopTimer = null;
+      try {
+        await initEngineIfNeeded();
+        await startCamera();
+        scanLoop();
+      } catch (err) {
+        console.error("Camera/start error:", err);
+        alert("Unable to access camera. Please allow camera permission.");
+        closeScanner();
+      }
     }
 
-    const videoEl = getVideo();
-    if (videoEl) {
-      videoEl.pause();
-      videoEl.srcObject = null;
+    function parseAamva(raw) {
+      let text = (raw || "")
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .replace(/[\x1e\x1d\x1c]/g, "\n");
+
+      text = text
+        .replace(/(^|[\n\r])\s*(DL|ID)(?=[A-Z]{3})/g, "$1$2\n")
+        .replace(/(@[\s\S]{0,200}?)(DL|ID)(?=[A-Z]{3})/g, "$1$2\n");
+
+      const fields = {};
+      for (const line of text.split("\n")) {
+        const m = line.match(/^([A-Z]{3})(.*)$/);
+        if (m) {
+          const code = m[1];
+          const val = (m[2] || "").trim();
+          if (val && fields[code] == null) fields[code] = val;
+        }
+      }
+
+      const re = /\b([A-Z]{3})([^\n\r]*)/g;
+      let mm;
+      while ((mm = re.exec(text)) !== null) {
+        const code = mm[1];
+        const val = (mm[2] || "").trim();
+        if (val && fields[code] == null) fields[code] = val;
+      }
+
+      return fields;
     }
 
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      stream = null;
+    function computeAgeFromDOB(dobStr) {
+      if (!dobStr) return null;
+      const digits = dobStr.replace(/\D/g, "");
+      if (digits.length < 8) return null;
+
+      let year, month, day;
+      const first4 = parseInt(digits.slice(0, 4), 10);
+      if (first4 >= 1900 && first4 <= 2099) {
+        year = first4;
+        month = parseInt(digits.slice(4, 6), 10);
+        day = parseInt(digits.slice(6, 8), 10);
+      } else {
+        month = parseInt(digits.slice(0, 2), 10);
+        day = parseInt(digits.slice(2, 4), 10);
+        year = parseInt(digits.slice(4, 8), 10);
+      }
+
+      if (!year || !month || !day) return null;
+
+      const today = new Date();
+      let age = today.getFullYear() - year;
+      const m = today.getMonth() + 1;
+      const d = today.getDate();
+      if (m < month || (m === month && d < day)) age -= 1;
+      if (age < 0 || age > 130) return null;
+      return age;
     }
 
-    setCameraState("idle");
-    syncButtons();
-    const torchBtn = document.getElementById("torchBtn");
-    if (torchBtn) torchBtn.disabled = true;
-  }
-
-  function togglePause(){
-    if (!running) return;
-    paused = !paused;
-    syncButtons();
-    setStatus(paused ? "Paused." : "Scanning for PDF417…");
-  }
-
-  async function switchCamera(){
-    if (!devices.length) await refreshCameras();
-    if (devices.length < 2){
-      showSnackbar("No second camera found.");
-      return;
-    }
-    const idx = devices.findIndex(d => d.deviceId === currentDeviceId);
-    const next = devices[(idx + 1) % devices.length];
-    currentDeviceId = next.deviceId;
-    await start(currentDeviceId);
-  }
-
-  function getActiveTrack(){
-    return stream?.getVideoTracks?.()[0] || null;
-  }
-
-  function updateTorchAvailability(){
-    const torchBtn = document.getElementById("torchBtn");
-    if (!torchBtn) return;
-
-    const track = getActiveTrack();
-    const caps = track?.getCapabilities?.();
-    const hasTorch = Boolean(caps?.torch);
-    torchBtn.disabled = !hasTorch;
-  }
-
-  async function toggleTorch(){
-    const track = getActiveTrack();
-    if (!track?.getCapabilities) {
-      showSnackbar("Flash not available.");
-      return;
+    function normalizeZip(zipRaw) {
+      if (!zipRaw) return "";
+      const digits = zipRaw.replace(/\D/g, "");
+      return digits.slice(0, 5);
     }
 
-    const caps = track.getCapabilities();
-    if (!caps.torch){
-      showSnackbar("Flash not supported on this device.");
-      return;
+    function normalizeGender(gRaw) {
+      if (!gRaw) return "";
+      const v = String(gRaw).trim().toUpperCase();
+      if (v === "1" || v === "M" || v === "MALE") return "Male";
+      if (v === "2" || v === "F" || v === "FEMALE") return "Female";
+      return "Other";
     }
 
-    torchOn = !torchOn;
-    try {
-      await track.applyConstraints({ advanced: [{ torch: torchOn }] });
-      showSnackbar(torchOn ? "Flash ON" : "Flash OFF");
-    } catch (e) {
-      console.error(e);
-      showSnackbar("Flash toggle failed.");
+    function deriveIdType(raw) {
+      if (!raw) return "";
+
+      const t = String(raw)
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .replace(/[\x1e\x1d\x1c]/g, "\n")
+        .toUpperCase();
+
+      const compact = t.replace(/\s+/g, "");
+
+      const m = compact.match(/ANSI([0-9]{6})([0-9]{2})([0-9]{2})([0-9]{2})(.*)/);
+      if (!m) return "";
+
+      const entries = parseInt(m[4], 10);
+      if (!Number.isFinite(entries) || entries <= 0) return "";
+
+      const table = m[5] || "";
+
+      for (let i = 0; i < entries; i++) {
+        const start = i * 10;
+        if (start + 10 > table.length) break;
+
+        const type = table.slice(start, start + 2);
+        if (type === "DL" || type === "ID") return type;
+      }
+
+      return "";
     }
-  }
 
-  function publish(rawText){
-    const text = (rawText || "").trim();
-    if (!text) return;
+    function fillFormFromScan(rawText) {
+      const f = parseAamva(rawText);
 
-    const now = Date.now();
-    if (text === lastText && now - lastAt < 1500) return;
-    lastText = text;
-    lastAt = now;
+      const first = (f.DAC || "").trim();
+      const middle = (f.DAD || "").trim();
+      const last = (f.DCS || "").trim();
+      const name = [first, middle, last]
+        .filter(Boolean)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
 
-    onScanSuccess(text);
-  }
+      const street = (f.DAG || "").trim();
+      const city = (f.DAI || "").trim();
+      const st = (f.DAJ || "").trim().toUpperCase();
+      const zip = normalizeZip(f.DAK || "");
 
-  function decodeWithZxing(imageData, width, height){
-    if (!zxing || !zxingReader) return "";
-    const luminance = new zxing.RGBLuminanceSource(imageData.data, width, height);
-    const binarizer = new zxing.HybridBinarizer(luminance);
-    const bitmap = new zxing.BinaryBitmap(binarizer);
-    const result = zxingReader.decode(bitmap, decodeHints);
-    return result?.getText?.() || "";
-  }
+      const gender = normalizeGender(f.DBC || "");
+      const age = computeAgeFromDOB(f.DBB || "");
 
-  async function scanLoop(){
-    if (stopLoop || !running) return;
+      const idNumber = (f.DAQ || "").trim();
+      const idType = deriveIdType(rawText);
 
-    try {
-      if (!paused) {
-        const videoEl = getVideo();
+      if (name) fullNameEl.value = name;
+      if (street) streetEl.value = street;
+      if (city) cityEl.value = city;
+
+      if (st && stateEl?.querySelector?.(`option[value="${st}"]`)) {
+        stateEl.value = st;
+      }
+
+      if (zip) zipEl.value = zip;
+
+      if (gender && genderEl?.querySelector?.(`option[value="${gender}"]`)) {
+        genderEl.value = gender;
+      }
+
+      if (age != null && age !== "") ageEl.value = String(age);
+
+      if (idType && idTypeEl?.querySelector?.(`option[value="${idType}"]`)) {
+        idTypeEl.value = idType;
+      }
+
+      if (idNumber) idNumEl.value = idNumber;
+
+      for (const el of [
+        fullNameEl,
+        streetEl,
+        cityEl,
+        stateEl,
+        zipEl,
+        genderEl,
+        ageEl,
+        idTypeEl,
+        idNumEl,
+      ]) {
+        if (!el) continue;
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+
+    function publish(text) {
+      const now = Date.now();
+      if (!text) return;
+      if (text === lastText && now - lastAt < DUP_MS) return;
+
+      lastText = text;
+      lastAt = now;
+
+      try {
+        fillFormFromScan(text);
+        navigator.vibrate?.(25);
+      } catch (e) {
+        console.error("Autofill error:", e);
+      }
+
+      closeScanner();
+    }
+
+    async function scanLoop() {
+      if (stopLoop) return;
+
+      try {
+        await initEngineIfNeeded();
+
         if (detector) {
-          const barcodes = await detector.detect(videoEl);
-          if (barcodes?.length) {
-            const first = barcodes[0];
-            const guide = getGuideRect();
-            const points = first.cornerPoints || [];
-            const box = pointsToViewportRect(points, videoEl);
-            if (!guide || !box || isRectInsideGuide(box, guide)) {
-              publish(first.rawValue || "");
-            } else {
-              setStatus("Align barcode fully inside the guide…");
-            }
-          }
-        } else if (zxingReader && videoEl && videoEl.readyState >= 2) {
-          const w = videoEl.videoWidth;
-          const h = videoEl.videoHeight;
-          if (w > 0 && h > 0) {
-            const canvasBundle = getCanvasCtx();
-            if (canvasBundle) {
-              const { canvas, ctx } = canvasBundle;
-              const cropW = Math.floor(w * 0.9);
-              const cropH = Math.floor(h * 0.55);
-              const sx = Math.floor((w - cropW) / 2);
-              const sy = Math.floor((h - cropH) / 2);
+          const codes = await detector.detect(video);
+          if (codes?.length) publish(codes[0].rawValue || "");
+        } else if (zxingReader && zxing && canvas && ctx) {
+          if (video.readyState >= 2) {
+            const w = video.videoWidth;
+            const h = video.videoHeight;
 
-              canvas.width = cropW;
-              canvas.height = cropH;
-              ctx.drawImage(videoEl, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+            const cropW = Math.floor(w * ROI_W);
+            const cropH = Math.floor(h * ROI_H);
+            const sx = Math.floor((w - cropW) / 2);
+            const sy = Math.floor((h - cropH) / 2);
 
-              const imageData = ctx.getImageData(0, 0, cropW, cropH);
-              try {
-                const text = decodeWithZxing(imageData, cropW, cropH);
-                publish(text);
-              } catch {
-                // No barcode found on this frame.
-              }
+            canvas.width = cropW;
+            canvas.height = cropH;
+            ctx.drawImage(video, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+
+            const imageData = ctx.getImageData(0, 0, cropW, cropH);
+
+            const luminance = new zxing.RGBLuminanceSource(
+              imageData.data,
+              cropW,
+              cropH
+            );
+            const binarizer = new zxing.HybridBinarizer(luminance);
+            const bitmap = new zxing.BinaryBitmap(binarizer);
+
+            try {
+              const res = zxingReader.decodeBitmap(bitmap);
+              publish(res?.getText?.() || "");
+            } catch {
+              // expected when nothing found
             }
           }
         }
-      }
-    } catch {
-      setStatus("Scanning… try better light or move closer.");
-    }
-
-    loopTimer = setTimeout(scanLoop, SCAN_INTERVAL_MS);
-  }
-
-  async function scanImageFile(file){
-    if (!file) return;
-    await initEngine();
-
-    const canvasBundle = getCanvasCtx();
-    if (!canvasBundle) return;
-    const { canvas, ctx } = canvasBundle;
-
-    const image = new Image();
-    image.src = URL.createObjectURL(file);
-    await image.decode();
-
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
-    ctx.drawImage(image, 0, 0);
-    URL.revokeObjectURL(image.src);
-
-    if (detector) {
-      const barcodes = await detector.detect(canvas);
-      if (barcodes?.length) {
-        publish(barcodes[0].rawValue || "");
-        return;
-      }
-      setStatus("No PDF417 found in the image.");
-      return;
-    }
-
-    if (zxingReader) {
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      try {
-        const text = decodeWithZxing(imageData, canvas.width, canvas.height);
-        publish(text);
       } catch {
-        setStatus("No PDF417 found in the image.");
+        // keep scanning
       }
+
+      setTimeout(scanLoop, FPS_MS);
+    }
+
+    window.addEventListener("beforeunload", stopCamera);
+
+    // ---- Simulation hook (for usability testing on desktops without a camera) ----
+    // If camera permission is blocked, allow user to click the camera area to simulate a scan.
+    const cameraArea = $(".camera-area");
+    if (cameraArea) {
+      cameraArea.addEventListener("click", () => {
+        if (!scannerScreen.classList.contains("is-open")) return;
+
+        // Only simulate if camera isn't running.
+        const hasStream = !!(
+          video.srcObject && video.srcObject.getTracks?.().length
+        );
+        if (hasStream) return;
+
+        const sample = [
+          "ANSI 636000110002DL00410278ZV03190008",
+          "DL",
+          "DAQ1234567890",
+          "DCSMARTIN",
+          "DACJAMIE",
+          "DADM",
+          "DAG123 MAIN ST",
+          "DAIANYTOWN",
+          "DAJCA",
+          "DAK90210",
+          "DBB19920115",
+          "DBC1",
+        ].join("\n");
+
+        publish(sample);
+      });
     }
   }
 
-  function onScanSuccess(rawText){
-    stop();
-    setStatus("PDF417 detected. Parsing…");
-
-    const parsed = parseAamva(rawText);
-    if (!parsed.ok){
-      navigate("guestRegistration");
-      showSnackbar("Auto-fill failed. Please enter details manually.");
-      return;
+  // Returning guest
+  function initReturningGuest() {
+    const card = $(".card");
+    if (card) {
+      setAllRowValues(card, {
+        Guest: state.guest.fullName || "Full Name",
+        "ID Number": state.guest.idNumber || "0000000000",
+        "ID Type": state.guest.idType || "ID/DL/Passport",
+        Rating: "0.00",
+        "Active Since": new Date().toLocaleString(),
+        "Latest Activity": new Date().toLocaleString(),
+      });
     }
 
-    navigate("guestRegistration");
-    applyScanToRegistration(parsed);
-    showSnackbar("Details auto-filled.");
+    const buttons = $$(".bottombar .btn");
+    const cancelBtn = buttons[0];
+    const proceedBtn = buttons[1];
 
-    const decision = decideReturningGuest();
-    setTimeout(() => {
-      if (decision === "returning") {
-        $("#returningName").textContent = state.guest.fullName || "Guest";
-        $("#returningMeta").textContent = `${state.guest.idType || "DL"} • ${state.guest.idNumber || "—"}`;
-        navigate("returningGuest");
-      } else {
-        $("#newGuestSummary").textContent =
-          `${state.guest.fullName || "Guest"} • ${state.guest.idType || "DL"} • ${state.guest.idNumber || "—"}`;
-        navigate("newGuest");
-      }
-    }, 250);
+    cancelBtn?.addEventListener("click", () => mount("registration"));
+    proceedBtn?.addEventListener("click", () => mount("stay"));
   }
 
-  return {
-    start,
-    stop,
-    togglePause,
-    switchCamera,
-    toggleTorch,
-    scanImageFile,
-    initEngine,
-    setStatus
-  };
-})();
-
-/* Start/stop scanner on navigation */
-const _navigate = navigate;
-navigate = function(screenId){
-  _navigate(screenId);
-  if (screenId === "scanner") Pdf417Scanner.start();
-  else Pdf417Scanner.stop();
-};
-
-/* =========================
-   Wiring
-========================= */
-function wireNav(){
-  document.body.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-nav]");
-    if (!btn) return;
-    const to = btn.getAttribute("data-nav");
-    if (to) navigate(to);
-  });
-
-  $("#snackbarCloseBtn").addEventListener("click", hideSnackbar);
-
-  $all('[data-action="other"]').forEach(b => b.addEventListener("click", () => {
-    showSnackbar("Module not included in this flow.");
-  }));
-  $all('[data-action="logout"]').forEach(b => b.addEventListener("click", () => {
-    showSnackbar("Logout confirmation not implemented in this demo.");
-  }));
-  $all('[data-action="profile"]').forEach(b => b.addEventListener("click", () => {
-    showSnackbar("Profile screen not implemented in this demo.");
-  }));
-}
-
-function wireRegistration(){
-  $("#registrationNextBtn").addEventListener("click", () => {
-    const ok = validateRegistration();
-    if (!ok){
-      showSnackbar("Please Complete All the Required Fields.");
-      return;
+  // New guest
+  function initNewGuest() {
+    const card = $(".card");
+    if (card) {
+      // New guest screen uses split card sections; update both where relevant.
+      const rights = $$(".right", card);
+      if (rights[0]) rights[0].textContent = state.guest.fullName || "Full Name";
+      if (rights[1]) rights[1].textContent = state.guest.idNumber || "0000000000";
+      if (rights[2]) rights[2].textContent = state.guest.idType || "ID/DL/Passport";
     }
-    navigate("stayDetails");
-  });
-}
 
-function wireReturningNewGuest(){
-  $("#returningProceedBtn").addEventListener("click", () => {
-    state.guest.guestId = "G-" + Math.random().toString(16).slice(2,8).toUpperCase();
-    navigate("stayDetails");
-  });
+    const buttons = $$(".bottombar .btn");
+    const skipBtn = buttons[0];
+    const saveBtn = buttons[1];
 
-  $("#newGuestSkipBtn").addEventListener("click", () => {
-    state.guest.guestId = null;
-    navigate("stayDetails");
-  });
+    skipBtn?.addEventListener("click", () => mount("stay"));
+    saveBtn?.addEventListener("click", () => mount("stay"));
+  }
 
-  $("#newGuestSaveBtn").addEventListener("click", () => {
-    state.guest.guestId = "G-" + Math.random().toString(16).slice(2,8).toUpperCase();
-    $("#newGuestDetails").textContent = `Guest created: ${state.guest.guestId}`;
-    navigate("stayDetails");
-  });
-}
+  // Stay details
+  function initStayDetails() {
+    // Default dates (copied from stayDetails.html)
+    (function setDefaultDates() {
+      const checkin = document.getElementById("checkin");
+      const checkout = document.getElementById("checkout");
 
-function wireStayDetails(){
-  ["checkIn","checkOut"].forEach(id => {
-    document.getElementById(id).addEventListener("change", () => {
-      const ci = $("#checkIn").value;
-      const co = $("#checkOut").value;
-      const n = nightsBetween(ci, co);
-      $("#nightsValue").textContent = n > 0 ? String(n) : "—";
-      state.stay.nights = n > 0 ? n : 0;
+      if (checkin && checkout && !checkin.value && !checkout.value) {
+        const d1 = new Date();
+        const d2 = new Date();
+        d2.setDate(d1.getDate() + 2);
+
+        checkin.value = toISODate(d1);
+        checkout.value = toISODate(d2);
+      }
+    })();
+
+    // Prefill
+    const map = state.stay;
+    for (const [id, val] of Object.entries(map)) {
+      const el = document.getElementById(id);
+      if (el && val) el.value = val;
+    }
+
+    const nextBtn = $(".primary-btn");
+    nextBtn?.addEventListener("click", () => {
+      // capture
+      state.stay.checkin = document.getElementById("checkin")?.value || "";
+      state.stay.checkout = document.getElementById("checkout")?.value || "";
+      state.stay.adults = document.getElementById("adults")?.value || "";
+      state.stay.children = document.getElementById("children")?.value || "";
+      state.stay.room = document.getElementById("room")?.value || "";
+      state.stay.rateKey = document.getElementById("rate")?.value || "";
+      state.stay.deposit = document.getElementById("deposit")?.value || "";
+      state.stay.discount = document.getElementById("discount")?.value || "";
+
+      computeDerived();
+      ensureBookingId();
+      mount("summary");
     });
-  });
 
-  $("#stayCloseBtn").addEventListener("click", () => {
-    if (confirmDiscard()) navigate("dashboard");
-  });
+    // Back button
+    const backBtn = $(".icon-btn.back");
+    backBtn?.addEventListener("click", () => {
+      // Return to the guest type screen; simplest: back to registration
+      mount("registration");
+    });
+  }
 
-  $("#stayNextBtn").addEventListener("click", () => {
-    const ok = validateStayDetails();
-    if (!ok){
-      showSnackbar("Please Complete All the Required Fields.");
-      return;
+  // Booking summary
+  function initBookingSummary() {
+    computeDerived();
+    ensureBookingId();
+
+    const cards = $$(".card");
+    const detailsCard = cards[0];
+    const totalCard = cards[1];
+
+    const checkinLabel = state.stay.checkin
+      ? `${state.stay.checkin} 2:00 PM`
+      : "Time and Date";
+    const checkoutLabel = state.stay.checkout
+      ? `${state.stay.checkout} 11:00 AM`
+      : "Time and Date";
+    const guestsCount =
+      (parseInt(state.stay.adults || "0", 10) || 0) +
+      (parseInt(state.stay.children || "0", 10) || 0);
+
+    const rateLabel = RATE_MAP[state.stay.rateKey]?.label
+      ? `$ ${RATE_MAP[state.stay.rateKey].amount.toFixed(2)}`
+      : "$ 00.00";
+
+    if (detailsCard) {
+      setAllRowValues(detailsCard, {
+        Guest: state.guest.fullName || "Full Name",
+        "Check-in": checkinLabel,
+        "Check-out": checkoutLabel,
+        "No. of Days": String(state.computed.nights || 0).padStart(2, "0"),
+        "Room Number": state.stay.room || "000",
+        Guests: String(guestsCount).padStart(2, "0"),
+        "Daily Rate": rateLabel,
+        Deposit: money(parseMoneyLike(state.stay.deposit)),
+        Discount: money(parseMoneyLike(state.stay.discount)),
+      });
     }
-    renderBookingSummary();
-    navigate("bookingSummary");
-  });
-}
 
-function wireBookingSummary(){
-  $("#summaryCloseBtn").addEventListener("click", () => {
-    if (confirmDiscard()) navigate("dashboard");
-  });
-
-  $("#payCashBtn").addEventListener("click", () => {
-    state.payment.method = "cash";
-    navigate("cashConfirm");
-  });
-
-  $("#payCardBtn").addEventListener("click", () => {
-    state.payment.method = "card";
-    navigate("cardPayment");
-  });
-}
-
-function wirePayments(){
-  $("#cardCloseBtn").addEventListener("click", () => {
-    if (confirmDiscard()) navigate("dashboard");
-  });
-  $("#cashCloseBtn").addEventListener("click", () => {
-    if (confirmDiscard()) navigate("dashboard");
-  });
-
-  $("#tapToPayBtn").addEventListener("click", () => {
-    state.payment.transactionType = "NFC";
-    renderNfcSummary();
-    navigate("tapToPay");
-  });
-
-  $("#cardProceedBtn").addEventListener("click", () => {
-    const ok = validateManualCard();
-    if (!ok){
-      showSnackbar("Please Complete All the Required Fields.");
-      return;
+    if (totalCard) {
+      setAllRowValues(totalCard, {
+        "Total Amount": money(state.computed.total),
+      });
     }
-    state.payment.transactionType = "Manual";
-    startProcessingAndRoute();
-  });
 
-  $("#simulateNfcTapBtn").addEventListener("click", () => {
-    startProcessingAndRoute();
-  });
+    // Back button
+    const backBtn = $(".icon-btn.back");
+    backBtn?.addEventListener("click", () => mount("stay"));
 
-  $("#cashYesBtn").addEventListener("click", () => {
-    state.payment.transactionType = "Cash";
-    state.payment.transactionId = "";
-    navigate("cashSuccess");
-    renderTransactionDetails("cashSuccessDetails", "cash");
-  });
-}
+    const buttons = $$(".bottombar .btn");
+    const cashBtn = buttons[0];
+    const cardBtn = buttons[1];
 
-function startProcessingAndRoute(){
-  navigate("paymentProcessing");
+    cashBtn?.addEventListener("click", () => {
+      state.payment.method = "cash";
+      mount("cash");
+    });
+    cardBtn?.addEventListener("click", () => {
+      state.payment.method = "card";
+      mount("card");
+    });
+  }
 
-  const digits = onlyDigits($("#cardNumber")?.value || "");
-  const last = digits ? digits[digits.length - 1] : "";
-  const decline = (last === "0" || last === "5") && state.payment.transactionType !== "NFC";
-
-  setTimeout(() => {
-    if (decline){
-      navigate("cardDeclined");
-      $("#declinedDetails").innerHTML = `
-        <div class="summary-row"><div class="muted">Reason</div><div><b>Issuer declined</b></div></div>
-        <div class="summary-row"><div class="muted">Total</div><div><b>${formatMoney(state.booking.total)}</b></div></div>
-      `;
-    } else {
-      navigate("cardSuccess");
-      renderTransactionDetails("cardSuccessDetails", "card");
+  // Cash payment
+  function initCashPayment() {
+    const card = $(".card");
+    if (card) {
+      setAllRowValues(card, {
+        "Total Amount": money(state.computed.total),
+      });
     }
-  }, 1200);
-}
+    const yesBtn = $(".primary-btn");
+    yesBtn?.addEventListener("click", () => mount("cashSuccess"));
+  }
 
-function wireReceipt(){
-  $("#printReceiptFromCardBtn").addEventListener("click", () => navigate("receiptPrinted"));
-  $("#printReceiptFromCashBtn").addEventListener("click", () => navigate("receiptPrinted"));
+  function initCashPaymentSuccessful() {
+    ensureBookingId();
 
-  $("#shareBtn").addEventListener("click", async () => {
-    const text = `Receipt: ${state.booking.bookingId} • ${formatMoney(state.booking.total)}`;
-    if (navigator.share){
-      try { await navigator.share({ title: "Receipt", text }); }
-      catch {}
-    } else {
-      showSnackbar("Share not supported in this browser.");
+    const stack = $(".stack") || document;
+    const allCards = $$(".card", stack);
+    for (const c of allCards) {
+      setAllRowValues(c, {
+        Guest: state.guest.fullName || "Full Name",
+        "Check-in": state.stay.checkin
+          ? `${state.stay.checkin} 2:00 PM`
+          : "Time and Date",
+        "Check-out": state.stay.checkout
+          ? `${state.stay.checkout} 11:00 AM`
+          : "Time and Date",
+        "No. of Days": String(state.computed.nights || 0).padStart(2, "0"),
+        "Room Number": state.stay.room || "000",
+        Guests: String(
+          (parseInt(state.stay.adults || "0", 10) || 0) +
+            (parseInt(state.stay.children || "0", 10) || 0)
+        ).padStart(2, "0"),
+        "Booking ID": state.payment.bookingId,
+        "Transaction Type": "Cash",
+        "Total Amount": money(state.computed.total),
+      });
     }
-  });
 
-  $("#doneBtn").addEventListener("click", () => {
-    resetFlow();
-    navigate("dashboard");
-  });
-}
+    const printBtn = $(".primary-btn");
+    printBtn?.addEventListener("click", () => mount("receipt"));
+  }
 
-function resetFlow(){
-  state.guest = { guestId:null, fullName:"", street:"", city:"", state:"", zip:"", gender:"", dob:"", age:"", idType:"", idNumber:"", rawScan:"" };
-  state.stay = { checkIn:"", checkOut:"", adults:"", children:"0", room:"", dailyRate:"", deposit:"0", discount:"0", nights:0 };
-  state.booking = { bookingId:"", total:0 };
-  state.payment = { method:"", transactionId:"", transactionType:"" };
+  // Card payment
+  function initCardPayment() {
+    computeDerived();
 
-  $("#registrationForm").reset();
-  $("#stayForm").reset();
-  $("#cardForm").reset();
-  $("#nightsValue").textContent = "—";
-}
-
-function wireScannerUI(){
-  $("#startScannerBtn")?.addEventListener("click", async () => {
-    Pdf417Scanner.setStatus("Requesting camera permission…");
-    await Pdf417Scanner.start();
-  });
-
-  $("#stopScannerBtn")?.addEventListener("click", async () => {
-    await Pdf417Scanner.stop();
-    Pdf417Scanner.setStatus("Stopped.");
-  });
-
-  $("#pauseResumeBtn")?.addEventListener("click", () => Pdf417Scanner.togglePause());
-  $("#switchCameraBtn")?.addEventListener("click", () => Pdf417Scanner.switchCamera());
-  $("#torchBtn")?.addEventListener("click", () => Pdf417Scanner.toggleTorch());
-  $("#flashToggleBtn")?.addEventListener("click", () => Pdf417Scanner.toggleTorch());
-
-  $("#fileInput")?.addEventListener("change", async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      Pdf417Scanner.setStatus("Decoding image…");
-      await Pdf417Scanner.scanImageFile(file);
-    } catch (err) {
-      console.error(err);
-      Pdf417Scanner.setStatus("Could not decode that image.");
-    } finally {
-      e.target.value = "";
+    // Total amount card
+    const totalCard = $(".card");
+    if (totalCard) {
+      setAllRowValues(totalCard, { "Total Amount": money(state.computed.total) });
     }
-  });
 
-  $("#scannerCloseBtn")?.addEventListener("click", () => {
-    Pdf417Scanner.stop();
-    navigate("guestRegistration");
-  });
-}
+    // Input helpers (copied from cardPayment.html)
+    const cardNumber = document.getElementById("cardNumber");
+    const expiry = document.getElementById("expiry");
+    const zip = document.getElementById("zip");
+    const cvv = document.getElementById("cvv");
 
-/* =========================
-   Init
-========================= */
-function init(){
-  initStateDropdown();
-  wireNav();
-  wireScannerUI();
-  wireRegistration();
-  wireReturningNewGuest();
-  wireStayDetails();
-  wireBookingSummary();
-  wirePayments();
-  wireReceipt();
+    if (cardNumber) {
+      cardNumber.addEventListener("input", () => {
+        const digits = cardNumber.value.replace(/\D/g, "").slice(0, 19);
+        const groups = digits.match(/.{1,4}/g) || [];
+        cardNumber.value = groups.join(" ");
+      });
+    }
+    if (expiry) {
+      expiry.addEventListener("input", () => {
+        const digits = expiry.value.replace(/\D/g, "").slice(0, 4);
+        const mm = digits.slice(0, 2);
+        const yy = digits.slice(2, 4);
+        expiry.value = yy ? `${mm}/${yy}` : mm;
+      });
+    }
+    if (cvv) {
+      cvv.addEventListener("input", () => {
+        cvv.value = cvv.value.replace(/\D/g, "").slice(0, 4);
+      });
+    }
+    if (zip) {
+      zip.addEventListener("input", () => {
+        zip.value = zip.value.replace(/\D/g, "").slice(0, 5);
+      });
+    }
 
-  const today = new Date();
-  const iso = today.toISOString().slice(0,10);
-  $("#checkIn").value = iso;
+    // Tap to pay
+    const tapBtn = $(".tap-btn");
+    tapBtn?.addEventListener("click", () => mount("tap"));
 
-  const tomorrow = new Date(today.getTime() + 86400000);
-  $("#checkOut").value = tomorrow.toISOString().slice(0,10);
-  $("#nightsValue").textContent = "1";
-  state.stay.nights = 1;
-}
+    // Proceed to pay
+    const payBtn = $(".primary-btn");
+    payBtn?.addEventListener("click", () => {
+      const digits = cardNumber?.value?.replace(/\D/g, "") || "";
+      state.payment.last4 = digits.slice(-4);
 
-init();
+      // simple decline simulation: if last digit is 0 => declined
+      const last = digits.slice(-1);
+      const declined = last === "0" && digits.length >= 12;
+
+      mount("processing");
+      // after 4 seconds show result
+      window.setTimeout(() => {
+        mount(declined ? "cardDeclined" : "cardSuccess");
+      }, 4000);
+    });
+
+    // Back button
+    const backBtn = $(".icon-btn[aria-label='Back']");
+    backBtn?.addEventListener("click", () => mount("summary"));
+  }
+
+  // Tap to pay screen: tap anywhere on canvas to simulate
+  function initTapToPay() {
+    const closeBtn = $(".close-btn");
+    closeBtn?.addEventListener("click", () => mount("card"));
+
+    const canvas = $(".canvas");
+    const tap = () => {
+      mount("processing");
+      window.setTimeout(() => mount("cardSuccess"), 4000);
+    };
+    canvas?.addEventListener("click", tap);
+  }
+
+  function initCardProcessing() {
+    // dots animation (copied from cardPaymentProcessing.html)
+    (function animateDots() {
+      const dotsEl = document.getElementById("dots");
+      if (!dotsEl) return;
+      const frames = [".", "..", "..."];
+      let i = 0;
+      dotsEl.textContent = "...";
+      window.setInterval(() => {
+        dotsEl.textContent = frames[i % frames.length];
+        i++;
+      }, 450);
+    })();
+  }
+
+  function initCardPaymentSuccessful() {
+    ensureBookingId();
+
+    const stack = $(".stack") || document;
+    const allCards = $$(".card", stack);
+    for (const c of allCards) {
+      setAllRowValues(c, {
+        Guest: state.guest.fullName || "Full Name",
+        "Check-in": state.stay.checkin
+          ? `${state.stay.checkin} 2:00 PM`
+          : "Time and Date",
+        "Check-out": state.stay.checkout
+          ? `${state.stay.checkout} 11:00 AM`
+          : "Time and Date",
+        "No. of Days": String(state.computed.nights || 0).padStart(2, "0"),
+        "Room Number": state.stay.room || "000",
+        Guests: String(
+          (parseInt(state.stay.adults || "0", 10) || 0) +
+            (parseInt(state.stay.children || "0", 10) || 0)
+        ).padStart(2, "0"),
+        "Booking ID": state.payment.bookingId,
+        "Transaction Type": "Card",
+        "Total Amount": money(state.computed.total),
+      });
+    }
+
+    const printBtn = $(".primary-btn");
+    printBtn?.addEventListener("click", () => mount("receipt"));
+  }
+
+  function initCardPaymentDeclined() {
+    ensureBookingId();
+
+    const cards = $$(".card");
+    for (const c of cards) {
+      setAllRowValues(c, {
+        "Booking ID": state.payment.bookingId,
+        "Transaction Type": "Card",
+        "Total Amount": money(state.computed.total),
+      });
+    }
+
+    const buttons = $$(".bottombar .btn");
+    const retryBtn = buttons[0];
+    const changeBtn = buttons[1];
+
+    retryBtn?.addEventListener("click", () => mount("card"));
+    changeBtn?.addEventListener("click", () => mount("summary"));
+  }
+
+  function initReceiptPrinted() {
+    const buttons = $$(".bottombar .btn");
+    const shareBtn = buttons[0];
+    const doneBtn = buttons[1];
+
+    shareBtn?.addEventListener("click", () => alert("Share simulated."));
+    doneBtn?.addEventListener("click", () => {
+      // Reset minimal state for next participant
+      state.guest = {
+        fullName: "",
+        streetAddress: "",
+        city: "",
+        state: "",
+        zip: "",
+        gender: "",
+        age: "",
+        idType: "",
+        idNumber: "",
+      };
+      state.stay = {
+        checkin: "",
+        checkout: "",
+        adults: "",
+        children: "",
+        room: "",
+        rateKey: "",
+        deposit: "",
+        discount: "",
+      };
+      state.payment = { method: "", bookingId: "", last4: "" };
+      state.computed = { nights: 0, rate: 0, total: 0 };
+
+      // Go to dashboard (or directly to registration). Keeping dashboard as "home".
+      mount("dashboard");
+    });
+  }
+
+  // ---------------------------
+  // Boot
+  // ---------------------------
+  // Per user story: open directly to the check-in form (Guest Registration)
+  mount("registration");
+})();
